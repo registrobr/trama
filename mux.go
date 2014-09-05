@@ -3,18 +3,18 @@ package trama
 import (
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	"net/http"
 	"sync"
 )
 
 type trama struct {
 	sync.RWMutex
-	router          *Router
-	templates       map[string]*template.Template
-	templateDelims  []string
-	Recover         func(interface{})
-	Error           func(error)
-	GlobalTemplates []string
+	router         *Router
+	templateDelims []string
+	Recover        func(interface{})
+	Error          func(error)
+	globalTemplate *template.Template
 }
 
 func New(errorFunc func(error)) *trama {
@@ -29,7 +29,23 @@ func New(errorFunc func(error)) *trama {
 	return t
 }
 
+type webHandlerConstructor func() WebHandler
+type ajaxHandlerConstructor func() AJAXHandler
+
+func (t *trama) SetGlobalTemplates(files ...string) {
+	t.globalTemplate = template.Must(template.ParseFiles(files...))
+
+	if len(t.templateDelims) == 2 {
+		t.globalTemplate.Delims(t.templateDelims[0], t.templateDelims[1])
+	}
+}
+
 func (t *trama) SetTemplateDelims(open, clos string) {
+	if t.globalTemplate != nil {
+		t.globalTemplate.Delims(open, clos)
+		return
+	}
+
 	t.templateDelims = []string{open, clos}
 }
 
@@ -38,26 +54,23 @@ func (t *trama) RegisterPage(uri string, h webHandlerConstructor) {
 	defer t.Unlock()
 
 	a := &adapter{webHandler: h, err: t.Error}
+	templ := template.Must(t.globalTemplate.Clone())
+
+	for _, f := range h().Templates() {
+		content, err := ioutil.ReadFile(f)
+
+		if err != nil {
+			panic(err)
+		}
+
+		s := string(content)
+		template.Must(templ.Parse(s))
+	}
+
+	a.template = templ
 
 	if err := t.router.AppendRoute(uri, a); err != nil {
 		panic("Cannot append route: " + err.Error())
-	}
-
-	templ := template.New(uri)
-
-	if len(t.templateDelims) == 2 {
-		templ.Delims(t.templateDelims[0], t.templateDelims[1])
-	}
-
-	handlerTemplates := h().Templates()
-
-	if len(handlerTemplates) > 0 {
-		files := make([]string, 0, len(t.GlobalTemplates)+len(handlerTemplates))
-		files = append(files, t.GlobalTemplates...)
-		files = append(files, handlerTemplates...)
-
-		templ = template.Must(templ.ParseFiles(files...))
-		t.templates[uri] = templ
 	}
 }
 
@@ -96,6 +109,3 @@ func (t *trama) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	handler.serveHTTP(w, r)
 }
-
-type webHandlerConstructor func() WebHandler
-type ajaxHandlerConstructor func() AJAXHandler

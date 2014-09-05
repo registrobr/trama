@@ -1,6 +1,9 @@
 package trama
 
-import "net/http"
+import (
+	"html/template"
+	"net/http"
+)
 
 type WebHandler interface {
 	Get(Response, *http.Request) error
@@ -68,6 +71,7 @@ type adapter struct {
 	ajaxHandler ajaxHandlerConstructor
 	uriVars     map[string]string
 	err         func(error)
+	template    *template.Template
 }
 
 func (a adapter) serveHTTP(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +111,7 @@ write:
 		interceptors[k].After(response, r)
 	}
 
-	// TODO escrever resposta
+	a.template.Execute(w, response.templateData) // TODO Escolher template pelo nome
 }
 
 func (a adapter) serveAJAX(rw http.ResponseWriter, r *http.Request) {

@@ -10,10 +10,11 @@ import (
 type paramDecoder struct {
 	structure interface{}
 	uriParams map[string]string
+	err       func(error)
 }
 
-func newParamDecoder(h interface{}, uriParams map[string]string) paramDecoder {
-	return paramDecoder{structure: h, uriParams: uriParams}
+func newParamDecoder(h interface{}, uriParams map[string]string, errorFunc func(error)) paramDecoder {
+	return paramDecoder{structure: h, uriParams: uriParams, err: errorFunc}
 }
 
 func (c *paramDecoder) Decode(r *http.Request) {
@@ -56,14 +57,14 @@ func (c *paramDecoder) unmarshalURIParams(st reflect.Value) {
 			case reflect.Int:
 				i, err := strconv.ParseInt(param, 10, 0)
 				if err != nil {
-					// TODO Logar erro
+					c.err(err)
 					continue
 				}
 				s.SetInt(i)
 			case reflect.Int64:
 				i, err := strconv.ParseInt(param, 10, 64)
 				if err != nil {
-					// TODO Logar erro
+					c.err(err)
 					continue
 				}
 				s.SetInt(i)

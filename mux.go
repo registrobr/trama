@@ -1,28 +1,63 @@
 package trama
 
 import (
+	"fmt"
+	"html/template"
 	"net/http"
 	"sync"
 )
 
 type trama struct {
 	sync.RWMutex
-	router  *Router
-	Recover func(interface{})
+	router          *Router
+	templates       map[string]*template.Template
+	templateDelims  []string
+	Recover         func(interface{})
+	Error           func(error)
+	GlobalTemplates []string
 }
 
-func New() *trama {
-	return &trama{router: NewRouter()}
+func New(errorFunc func(error)) *trama {
+	t := &trama{router: NewRouter()}
+
+	if errorFunc != nil {
+		t.Error = errorFunc
+	} else {
+		t.Error = func(e error) { println(e.Error()) }
+	}
+
+	return t
+}
+
+func (t *trama) SetTemplateDelims(open, clos string) {
+	t.templateDelims = []string{open, clos}
 }
 
 func (t *trama) RegisterPage(uri string, h webHandlerConstructor) {
 	t.Lock()
 	defer t.Unlock()
 
-	a := &adapter{webHandler: h}
+	a := &adapter{webHandler: h, err: t.Error}
 
 	if err := t.router.AppendRoute(uri, a); err != nil {
 		panic("Cannot append route: " + err.Error())
+	}
+
+	templ := template.New(uri)
+
+	if len(t.templateDelims) == 2 {
+		templ.Delims(t.templateDelims[0], t.templateDelims[1])
+	}
+
+	handlerTemplates := h().Templates()
+
+	if len(handlerTemplates) > 0 {
+		files := make([]string, 0, len(t.GlobalTemplates)+len(handlerTemplates))
+		files = append(files, t.GlobalTemplates...)
+		files = append(files, handlerTemplates...)
+
+		templ = template.Must(templ.ParseFiles(files...))
+		t.templates[uri] = templ
 	}
 }
 
@@ -30,7 +65,7 @@ func (t *trama) RegisterService(uri string, h ajaxHandlerConstructor) {
 	t.Lock()
 	defer t.Unlock()
 
-	a := &adapter{ajaxHandler: h}
+	a := &adapter{ajaxHandler: h, err: t.Error}
 
 	if err := t.router.AppendRoute(uri, a); err != nil {
 		panic("Cannot append route: " + err.Error())
@@ -47,7 +82,7 @@ func (t *trama) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				t.Recover(r)
 				w.WriteHeader(http.StatusInternalServerError)
 			} else {
-				// TODO Logar erro
+				t.Error(fmt.Errorf("%s", r))
 			}
 		}
 	}()
@@ -59,7 +94,7 @@ func (t *trama) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handler.ServeHTTP(w, r)
+	handler.serveHTTP(w, r)
 }
 
 type webHandlerConstructor func() WebHandler

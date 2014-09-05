@@ -67,9 +67,10 @@ type adapter struct {
 	webHandler  webHandlerConstructor
 	ajaxHandler ajaxHandlerConstructor
 	uriVars     map[string]string
+	err         func(error)
 }
 
-func (a adapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (a adapter) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if a.webHandler != nil {
 		a.serveWeb(w, r)
 	} else if a.ajaxHandler != nil {
@@ -86,7 +87,7 @@ func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
 		err := interceptor.Before(response, r)
 
 		if err != nil {
-			// TODO logar erro
+			a.err(err)
 			interceptors = interceptors[:k]
 			goto write
 		}
@@ -113,7 +114,7 @@ func (a adapter) serveAJAX(rw http.ResponseWriter, r *http.Request) {
 	w := &ResponseWriter{ResponseWriter: rw}
 
 	handler := a.ajaxHandler()
-	paramsDecoder := newParamDecoder(handler, a.uriVars)
+	paramsDecoder := newParamDecoder(handler, a.uriVars, a.err)
 	paramsDecoder.Decode(r)
 
 	interceptors := handler.Interceptors()

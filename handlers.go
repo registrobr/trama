@@ -1,0 +1,155 @@
+package trama
+
+import "net/http"
+
+type WebHandler interface {
+	Get(Response, *http.Request) error
+	Post(Response, *http.Request) error
+	Interceptors() WebInterceptorChain
+	Templates() []string
+}
+
+type AJAXHandler interface {
+	Get(http.ResponseWriter, *http.Request)
+	Post(http.ResponseWriter, *http.Request)
+	Put(http.ResponseWriter, *http.Request)
+	Delete(http.ResponseWriter, *http.Request)
+	Patch(http.ResponseWriter, *http.Request)
+	Head(http.ResponseWriter, *http.Request)
+	Interceptors() AJAXInterceptorChain
+}
+
+type DefaultWebHandler struct {
+	NopWebInterceptorChain
+}
+
+func (d *DefaultWebHandler) Get(Response, *http.Request) error {
+	return nil
+}
+
+func (d *DefaultWebHandler) Post(Response, *http.Request) error {
+	return nil
+}
+
+func (d *DefaultWebHandler) Templates() []string {
+	return nil
+}
+
+type DefaultAJAXHandler struct {
+	NopAJAXInterceptorChain
+}
+
+func (s *DefaultAJAXHandler) Get(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+func (s *DefaultAJAXHandler) Post(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+func (s *DefaultAJAXHandler) Put(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+func (s *DefaultAJAXHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+func (s *DefaultAJAXHandler) Patch(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+func (s *DefaultAJAXHandler) Head(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusMethodNotAllowed)
+}
+
+type adapter struct {
+	webHandler  webHandlerConstructor
+	ajaxHandler ajaxHandlerConstructor
+	uriVars     map[string]string
+}
+
+func (a adapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if a.webHandler != nil {
+		a.serveWeb(w, r)
+	} else if a.ajaxHandler != nil {
+		a.serveAJAX(w, r)
+	}
+}
+
+func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
+	response := &TramaResponse{}
+	handler := a.webHandler()
+	interceptors := handler.Interceptors()
+
+	for k, interceptor := range interceptors {
+		err := interceptor.Before(response, r)
+
+		if err != nil {
+			// TODO logar erro
+			interceptors = interceptors[:k]
+			goto write
+		}
+	}
+
+	switch r.Method {
+	case "GET":
+		handler.Get(response, r)
+	case "POST":
+		handler.Post(response, r)
+	default:
+		w.WriteHeader(http.StatusNotImplemented)
+	}
+
+write:
+	for k := len(interceptors) - 1; k >= 0; k-- {
+		interceptors[k].After(response, r)
+	}
+
+	// TODO escrever resposta
+}
+
+func (a adapter) serveAJAX(rw http.ResponseWriter, r *http.Request) {
+	w := &ResponseWriter{ResponseWriter: rw}
+
+	handler := a.ajaxHandler()
+	paramsDecoder := newParamDecoder(handler, a.uriVars)
+	paramsDecoder.Decode(r)
+
+	interceptors := handler.Interceptors()
+
+	for k, interceptor := range interceptors {
+		interceptor.Before(w, r)
+
+		if w.status > 0 || w.Written {
+			interceptors = interceptors[:k]
+			goto write
+		}
+	}
+
+	switch r.Method {
+	case "GET":
+		handler.Get(w, r)
+	case "POST":
+		handler.Post(w, r)
+	case "PUT":
+		handler.Put(w, r)
+	case "DELETE":
+		handler.Delete(w, r)
+	case "PATCH":
+		handler.Patch(w, r)
+	case "HEAD":
+		handler.Head(w, r)
+	default:
+		w.WriteHeader(http.StatusNotImplemented)
+	}
+
+write:
+	for k := len(interceptors) - 1; k >= 0; k-- {
+		interceptors[k].After(w, r)
+	}
+
+	if !w.Written {
+		w.Write(nil)
+	}
+}

@@ -38,21 +38,21 @@ type Response interface {
 }
 
 type TramaResponse struct {
-	redirectURL        string
-	redirectStatusCode int
-	templateName       string
-	templateData       interface{}
+	RedirectURL        string
+	RedirectStatusCode int
+	TemplateName       string
+	TemplateData       interface{}
 }
 
 func (t *TramaResponse) Redirect(url string, statusCode int) {
-	t.redirectURL = url
-	t.redirectStatusCode = statusCode
+	t.RedirectURL = url
+	t.RedirectStatusCode = statusCode
 }
 
 func (t *TramaResponse) SetTemplate(name string) {
-	t.templateName = name
+	t.TemplateName = name
 }
 
 func (t *TramaResponse) SetTemplateData(data interface{}) {
-	t.templateData = data
+	t.TemplateData = data
 }

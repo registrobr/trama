@@ -111,7 +111,11 @@ write:
 		interceptors[k].After(response, r)
 	}
 
-	a.template.Execute(w, response.templateData) // TODO Escolher template pelo nome
+	if len(response.TemplateName) > 0 {
+		a.template.ExecuteTemplate(w, response.TemplateName, response.TemplateData)
+	} else {
+		a.template.Execute(w, response.TemplateData)
+	}
 }
 
 func (a adapter) serveAJAX(rw http.ResponseWriter, r *http.Request) {

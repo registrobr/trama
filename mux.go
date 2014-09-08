@@ -3,18 +3,17 @@ package trama
 import (
 	"fmt"
 	"html/template"
-	"io/ioutil"
 	"net/http"
 	"sync"
 )
 
 type trama struct {
 	sync.RWMutex
-	router         *Router
-	templateDelims []string
-	Recover        func(interface{})
-	Error          func(error)
-	globalTemplate *template.Template
+	router          *Router
+	templateDelims  []string
+	Recover         func(interface{})
+	Error           func(error)
+	GlobalTemplates []string
 }
 
 func New(errorFunc func(error)) *trama {
@@ -32,20 +31,7 @@ func New(errorFunc func(error)) *trama {
 type webHandlerConstructor func() WebHandler
 type ajaxHandlerConstructor func() AJAXHandler
 
-func (t *trama) SetGlobalTemplates(files ...string) {
-	t.globalTemplate = template.Must(template.ParseFiles(files...))
-
-	if len(t.templateDelims) == 2 {
-		t.globalTemplate.Delims(t.templateDelims[0], t.templateDelims[1])
-	}
-}
-
 func (t *trama) SetTemplateDelims(open, clos string) {
-	if t.globalTemplate != nil {
-		t.globalTemplate.Delims(open, clos)
-		return
-	}
-
 	t.templateDelims = []string{open, clos}
 }
 
@@ -54,17 +40,19 @@ func (t *trama) RegisterPage(uri string, h webHandlerConstructor) {
 	defer t.Unlock()
 
 	a := &adapter{webHandler: h, err: t.Error}
-	templ := template.Must(t.globalTemplate.Clone())
+	templ := template.New(uri)
 
-	for _, f := range h().Templates() {
-		content, err := ioutil.ReadFile(f)
+	if len(t.templateDelims) == 2 {
+		templ.Delims(t.templateDelims[0], t.templateDelims[1])
+	}
 
-		if err != nil {
-			panic(err)
-		}
+	handlerTemplates := h().Templates()
 
-		s := string(content)
-		template.Must(templ.Parse(s))
+	if len(handlerTemplates) > 0 {
+		files := make([]string, 0, len(t.GlobalTemplates)+len(handlerTemplates))
+		files = append(files, t.GlobalTemplates...)
+		files = append(files, handlerTemplates...)
+		templ = template.Must(templ.ParseFiles(files...))
 	}
 
 	a.template = templ

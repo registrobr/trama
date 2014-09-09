@@ -103,11 +103,12 @@ func TestAppendRoute(t *testing.T) {
 
 func TestFindRoute(t *testing.T) {
 	var data = []struct {
-		description string
-		route       string
-		matchURI    string
-		uriVars     map[string]string
-		handler     adapter
+		description  string
+		route        string
+		matchURI     string
+		uriVars      map[string]string
+		handler      adapter
+		shouldntFind bool
 	}{
 		{
 			description: "It should find a simple route",
@@ -142,6 +143,13 @@ func TestFindRoute(t *testing.T) {
 			},
 			handler: adapter{template: template.New("test")},
 		},
+		{
+			description:  "It shouldn't find a route",
+			route:        "gestuais/do/corpo/do/fogo",
+			matchURI:     "gestuais/das/mãos",
+			handler:      adapter{template: template.New("test")},
+			shouldntFind: true,
+		},
 	}
 
 	rt := newRouter()
@@ -155,9 +163,17 @@ func TestFindRoute(t *testing.T) {
 
 		handler, err := rt.match(item.matchURI)
 
-		if err != nil {
-			t.Errorf("Item %d, “%s”, couldn't find a route: %s", i, item.description, err)
+		if err == ErrRouteNotFound {
+			if !item.shouldntFind {
+				t.Errorf("Item %d, “%s”, couldn't find a route: %s", i, item.description, err)
+			}
+		} else if err != nil {
+			t.Errorf("Item %d, “%s”, unexpected error: %s", i, item.description, err)
 		} else {
+			if item.shouldntFind {
+				t.Fatalf("Item %d, “%s”, found a route when it shoudn't", i, item.description)
+			}
+
 			if handler.template != item.handler.template {
 				t.Errorf("Item %d, “%s”, wrong handler found!", i, item.description)
 			}

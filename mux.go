@@ -9,7 +9,7 @@ import (
 
 type trama struct {
 	sync.RWMutex
-	router          *Router
+	router          router
 	templateDelims  []string
 	Recover         func(interface{})
 	Error           func(error)
@@ -17,7 +17,7 @@ type trama struct {
 }
 
 func New(errorFunc func(error)) *trama {
-	t := &trama{router: NewRouter()}
+	t := &trama{router: newRouter()}
 
 	if errorFunc != nil {
 		t.Error = errorFunc
@@ -39,7 +39,7 @@ func (t *trama) RegisterPage(uri string, h webHandlerConstructor) {
 	t.Lock()
 	defer t.Unlock()
 
-	a := &adapter{webHandler: h, err: t.Error}
+	a := adapter{webHandler: h, err: t.Error}
 	templ := template.New(uri)
 
 	if len(t.templateDelims) == 2 {
@@ -57,7 +57,7 @@ func (t *trama) RegisterPage(uri string, h webHandlerConstructor) {
 
 	a.template = templ
 
-	if err := t.router.AppendRoute(uri, a); err != nil {
+	if err := t.router.appendRoute(uri, a); err != nil {
 		panic("Cannot append route: " + err.Error())
 	}
 }
@@ -66,9 +66,9 @@ func (t *trama) RegisterService(uri string, h ajaxHandlerConstructor) {
 	t.Lock()
 	defer t.Unlock()
 
-	a := &adapter{ajaxHandler: h, err: t.Error}
+	a := adapter{ajaxHandler: h, err: t.Error}
 
-	if err := t.router.AppendRoute(uri, a); err != nil {
+	if err := t.router.appendRoute(uri, a); err != nil {
 		panic("Cannot append route: " + err.Error())
 	}
 }
@@ -88,7 +88,7 @@ func (t *trama) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	handler, err := t.router.Match(r.URL.Path)
+	handler, err := t.router.match(r.URL.Path)
 
 	if err != nil {
 		http.NotFound(w, r)

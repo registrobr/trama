@@ -7,11 +7,16 @@ import (
 
 var (
 	ErrRouteAlreadyExists = errors.New("Route already exists")
+	ErrRouteNotFound      = errors.New("Route not found")
 	ErrWildcardConflict   = errors.New("Wildcard node cannot have siblings")
 )
 
 type router struct {
 	root *node
+}
+
+func newRouter() router {
+	return router{root: &node{}}
 }
 
 func (r *router) appendRoute(uri string, h adapter) error {
@@ -22,16 +27,12 @@ func (r *router) appendRoute(uri string, h adapter) error {
 		return ErrRouteAlreadyExists
 	}
 
-	if nod.wildcardChild != nil {
-		return ErrWildcardConflict
-	}
-
-	for _, value := range remainingSequence {
-		if value.isWildcard() && len(nod.children) > 0 {
+	for _, tok := range remainingSequence {
+		if !nod.canAddTokenAsChild(tok) {
 			return ErrWildcardConflict
 		}
 
-		newNode := &node{value: value}
+		newNode := &node{value: tok}
 		nod.addChild(newNode)
 		nod = newNode
 	}
@@ -51,7 +52,7 @@ func (r *router) match(uri string) (adapter, error) {
 	return node.handler, nil
 }
 
-func (r *router) lastNodeThatMatches(sequence []token) (*node, sequence) {
+func (r *router) lastNodeThatMatches(sequence []token) (*node, []token) {
 	current := r.root
 
 	for i, tok := range sequence {
@@ -68,14 +69,14 @@ func (r *router) lastNodeThatMatches(sequence []token) (*node, sequence) {
 	return current, sequence
 }
 
-func (r *router) findNode(sequence sequence) (*node, error) {
+func (r *router) findNode(sequence []token) (*node, error) {
 	uriVars := make(map[string]string)
 	current := r.root
 
 	for _, value := range sequence {
 		if current.wildcardChild != nil {
 			uriVars[current.wildcardChild.value.parameter] = value.name
-			current = wildcardChild
+			current = current.wildcardChild
 		} else {
 			var ok bool
 			current, ok = current.children[value]
@@ -144,8 +145,12 @@ type node struct {
 
 func (n *node) addChild(newNode *node) {
 	if newNode.value.isWildcard() {
-		n.wildcardChild = node
+		n.wildcardChild = newNode
 	} else {
 		n.children[newNode.value] = newNode
 	}
+}
+
+func (n *node) canAddTokenAsChild(t token) bool {
+	return n.wildcardChild == nil && (!t.isWildcard() || len(n.children) == 0)
 }

@@ -6,55 +6,118 @@ import (
 )
 
 var (
-	ErrRouteNotFound      = errors.New("Router not found")
 	ErrRouteAlreadyExists = errors.New("Route already exists")
-	ErrCannotAppendRoute  = errors.New("Cannot append route")
-	ErrOnlyOneWildcard    = errors.New("Only one wildcard is allowed in this level")
+	ErrWildcardConflict   = errors.New("Wildcard node cannot have siblings")
 )
 
-type node struct {
-	name             string
-	handler          *adapter
-	isWildcard       bool
-	hasChildWildcard bool
-	parent           *node
-	children         map[string]*node
-	wildcardName     string
+type router struct {
+	root *node
 }
 
-type Router struct {
-	root    *node
-	current *node
-}
+func (r *router) appendRoute(uri string, h adapter) error {
+	sequence := newTokenSequence(uri)
+	nod, remainingSequence := r.lastNodeThatMatches(sequence)
 
-func NewRouter() *Router {
-	r := new(Router)
-	root := new(node)
-	root.children = make(map[string]*node)
-	r.root = root
-	r.current = r.root
-	return r
-}
-
-func isWildcard(l string) bool {
-	return l[0] == '{' && l[len(l)-1] == '}'
-}
-
-func cleanWildcard(l string) string {
-	return l[1 : len(l)-1]
-}
-
-func (r *Router) nodeExists(n string) (*node, bool) {
-	v, ok := r.current.children[n]
-	if !ok && r.current.hasChildWildcard {
-		// looking for wildcard
-		v, ok = r.current.children[r.current.wildcardName]
+	if len(remainingSequence) == 0 {
+		return ErrRouteAlreadyExists
 	}
 
-	return v, ok
+	if nod.wildcardChild != nil {
+		return ErrWildcardConflict
+	}
+
+	for _, value := range remainingSequence {
+		if value.isWildcard() && len(nod.children) > 0 {
+			return ErrWildcardConflict
+		}
+
+		newNode := &node{value: value}
+		nod.addChild(newNode)
+		nod = newNode
+	}
+
+	nod.handler = h
+	return nil
 }
 
-func (r *Router) AppendRoute(uri string, h *adapter) error {
+func (r *router) match(uri string) (adapter, error) {
+	sequence := newTokenSequence(uri)
+	node, err := r.findNode(sequence)
+
+	if err != nil {
+		return adapter{}, err
+	}
+
+	return node.handler, nil
+}
+
+func (r *router) lastNodeThatMatches(sequence []token) (*node, sequence) {
+	current := r.root
+
+	for i, tok := range sequence {
+		child, ok := current.children[tok]
+
+		if ok {
+			current = child
+		} else {
+			sequence = sequence[i:]
+			break
+		}
+	}
+
+	return current, sequence
+}
+
+func (r *router) findNode(sequence sequence) (*node, error) {
+	uriVars := make(map[string]string)
+	current := r.root
+
+	for _, value := range sequence {
+		if current.wildcardChild != nil {
+			uriVars[current.wildcardChild.value.parameter] = value.name
+			current = wildcardChild
+		} else {
+			var ok bool
+			current, ok = current.children[value]
+
+			if !ok {
+				return nil, ErrRouteNotFound
+			}
+		}
+	}
+
+	current.handler.uriVars = uriVars
+	return current, nil
+}
+
+type token struct {
+	name      string
+	parameter string
+}
+
+func newToken(value string) token {
+	var t token
+	t.set(value)
+	return t
+}
+
+func valueIsWildcard(value string) bool {
+	return value[0] == '{' && value[len(value)-1] == '}'
+}
+
+func (n *token) set(value string) {
+	if valueIsWildcard(value) {
+		n.parameter = value[1 : len(value)-1]
+	} else {
+		n.name = value
+	}
+}
+
+func (n *token) isWildcard() bool {
+	return len(n.parameter) > 0
+}
+
+func newTokenSequence(uri string) []token {
 	uri = strings.TrimSpace(uri)
 
 	// Make sure we are not appending the root ("/"), otherwise remove final slash
@@ -62,104 +125,27 @@ func (r *Router) AppendRoute(uri string, h *adapter) error {
 		uri = uri[:len(uri)-1]
 	}
 
-	// Should end at root node
-	defer func() {
-		r.current = r.root
-	}()
+	segments := strings.Split(uri, "/")
+	sequence := make([]token, len(segments))
 
-	appended := false
-	tokens := strings.Split(uri, "/")
-	for i, v := range tokens {
-		if v == "" {
-			continue
-		}
-
-		if n, ok := r.nodeExists(v); ok {
-			if i == len(tokens)-1 && n.handler != nil {
-				return ErrRouteAlreadyExists
-
-			} else if i == len(tokens)-1 {
-				n.handler = h
-				return nil
-			}
-
-			r.current = n
-			appended = true
-			continue
-		}
-
-		n := new(node)
-		n.children = make(map[string]*node)
-
-		// only one child wildcard per node
-		if isWildcard(v) {
-			if r.current.hasChildWildcard {
-				return ErrOnlyOneWildcard
-			}
-
-			n.isWildcard = true
-			r.current.wildcardName = v
-			r.current.hasChildWildcard = true
-		}
-
-		n.name = v
-		n.parent = r.current
-		r.current.children[n.name] = n
-		r.current = n
-		appended = true
+	for i, token := range segments {
+		sequence[i] = newToken(token)
 	}
 
-	if r.current != r.root {
-		r.current.handler = h
-	}
-
-	if appended == false {
-		return ErrCannotAppendRoute
-	}
-
-	return nil
-
+	return sequence
 }
 
-func (n *node) findChild(name string) *node {
-	v, ok := n.children[name]
-	if !ok && n.hasChildWildcard {
-		// looking for wildcard
-		v = n.children[n.wildcardName]
-	}
-
-	return v
+type node struct {
+	value         token
+	handler       adapter
+	children      map[token]*node
+	wildcardChild *node
 }
 
-// This method rebuilds a route based on a given URI
-func (r *Router) Match(uri string) (adapter, error) {
-	uriVars := make(map[string]string)
-	var h adapter
-
-	current := r.current
-	uri = strings.TrimSpace(uri)
-	for _, v := range strings.Split(uri, "/") {
-		if v == "" {
-			continue
-		}
-
-		n := current.findChild(v)
-		if n == nil {
-			return h, ErrRouteNotFound
-		}
-
-		if n.isWildcard {
-			uriVars[cleanWildcard(n.name)] = v
-		}
-
-		current = n
+func (n *node) addChild(newNode *node) {
+	if newNode.value.isWildcard() {
+		n.wildcardChild = node
+	} else {
+		n.children[newNode.value] = newNode
 	}
-
-	if current.handler == nil {
-		return h, ErrRouteNotFound
-	}
-
-	h = *current.handler
-	h.uriVars = uriVars
-	return h, nil
 }

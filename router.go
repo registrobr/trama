@@ -16,14 +16,14 @@ type router struct {
 }
 
 func newRouter() router {
-	return router{root: &node{}}
+	return router{root: newNode(token{})}
 }
 
-func (r *router) appendRoute(uri string, h adapter) error {
+func (r *router) appendRoute(uri string, h *adapter) error {
 	sequence := newTokenSequence(uri)
 	nod, remainingSequence := r.lastNodeThatMatches(sequence)
 
-	if len(remainingSequence) == 0 {
+	if len(remainingSequence) == 0 && nod.hasHandler() {
 		return ErrRouteAlreadyExists
 	}
 
@@ -32,21 +32,21 @@ func (r *router) appendRoute(uri string, h adapter) error {
 			return ErrWildcardConflict
 		}
 
-		newNode := &node{value: tok}
-		nod.addChild(newNode)
-		nod = newNode
+		n := newNode(tok)
+		nod.addChild(n)
+		nod = n
 	}
 
 	nod.handler = h
 	return nil
 }
 
-func (r *router) match(uri string) (adapter, error) {
+func (r *router) match(uri string) (*adapter, error) {
 	sequence := newTokenSequence(uri)
 	node, err := r.findNode(sequence)
 
 	if err != nil {
-		return adapter{}, err
+		return nil, err
 	}
 
 	return node.handler, nil
@@ -54,41 +54,42 @@ func (r *router) match(uri string) (adapter, error) {
 
 func (r *router) lastNodeThatMatches(sequence []token) (*node, []token) {
 	current := r.root
+	var i int
 
-	for i, tok := range sequence {
-		child, ok := current.children[tok]
+	for i = 0; i < len(sequence); i++ {
+		child := current.child(sequence[i])
 
-		if ok {
-			current = child
-		} else {
-			sequence = sequence[i:]
+		if child == nil {
 			break
 		}
+
+		current = child
 	}
 
-	return current, sequence
+	return current, sequence[i:]
 }
 
 func (r *router) findNode(sequence []token) (*node, error) {
 	uriVars := make(map[string]string)
 	current := r.root
 
-	for _, value := range sequence {
-		if current.wildcardChild != nil {
-			uriVars[current.wildcardChild.value.parameter] = value.name
-			current = current.wildcardChild
-		} else {
-			var ok bool
-			current, ok = current.children[value]
+	for _, tok := range sequence {
+		child := current.childForValue(tok.name)
 
-			if !ok {
-				return nil, ErrRouteNotFound
-			}
+		if child == nil {
+			return nil, ErrRouteNotFound
+		}
+
+		current = child
+
+		if child.value.isWildcard() {
+			uriVars[child.value.parameter] = tok.name
 		}
 	}
 
-	current.handler.uriVars = uriVars
-	return current, nil
+	h := *current.handler
+	h.uriVars = uriVars
+	return &node{handler: &h}, nil
 }
 
 type token struct {
@@ -103,6 +104,10 @@ func newToken(value string) token {
 }
 
 func valueIsWildcard(value string) bool {
+	if len(value) == 0 {
+		return false
+	}
+
 	return value[0] == '{' && value[len(value)-1] == '}'
 }
 
@@ -138,9 +143,17 @@ func newTokenSequence(uri string) []token {
 
 type node struct {
 	value         token
-	handler       adapter
+	handler       *adapter
 	children      map[token]*node
 	wildcardChild *node
+}
+
+func newNode(t token) *node {
+	return &node{value: t, children: make(map[token]*node)}
+}
+
+func (n *node) hasHandler() bool {
+	return n.handler != nil
 }
 
 func (n *node) addChild(newNode *node) {
@@ -149,6 +162,22 @@ func (n *node) addChild(newNode *node) {
 	} else {
 		n.children[newNode.value] = newNode
 	}
+}
+
+func (n *node) child(t token) *node {
+	if n.wildcardChild != nil && n.wildcardChild.value == t {
+		return n.wildcardChild
+	}
+
+	return n.children[t]
+}
+
+func (n *node) childForValue(value string) *node {
+	if n.wildcardChild != nil {
+		return n.wildcardChild
+	}
+
+	return n.children[token{name: value}]
 }
 
 func (n *node) canAddTokenAsChild(t token) bool {

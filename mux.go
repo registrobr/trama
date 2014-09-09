@@ -39,7 +39,7 @@ func (t *trama) RegisterPage(uri string, h webHandlerConstructor) {
 	t.Lock()
 	defer t.Unlock()
 
-	a := adapter{webHandler: h, err: t.Error}
+	a := &adapter{webHandler: h, err: t.Error}
 	templ := template.New(uri)
 
 	if len(t.templateDelims) == 2 {
@@ -66,7 +66,7 @@ func (t *trama) RegisterService(uri string, h ajaxHandlerConstructor) {
 	t.Lock()
 	defer t.Unlock()
 
-	a := adapter{ajaxHandler: h, err: t.Error}
+	a := &adapter{ajaxHandler: h, err: t.Error}
 
 	if err := t.router.appendRoute(uri, a); err != nil {
 		panic("Cannot append route: " + err.Error())

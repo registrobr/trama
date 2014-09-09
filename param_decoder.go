@@ -17,7 +17,7 @@ func newParamDecoder(h interface{}, uriParams map[string]string, errorFunc func(
 	return paramDecoder{structure: h, uriParams: uriParams, err: errorFunc}
 }
 
-func (c *paramDecoder) Decode(r *http.Request) {
+func (c *paramDecoder) decode(r *http.Request) {
 	st := reflect.ValueOf(c.structure).Elem()
 	c.unmarshalURIParams(st)
 

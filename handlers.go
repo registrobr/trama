@@ -123,7 +123,7 @@ func (a adapter) serveAJAX(rw http.ResponseWriter, r *http.Request) {
 
 	handler := a.ajaxHandler()
 	paramsDecoder := newParamDecoder(handler, a.uriVars, a.err)
-	paramsDecoder.Decode(r)
+	paramsDecoder.decode(r)
 
 	interceptors := handler.Interceptors()
 

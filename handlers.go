@@ -87,11 +87,12 @@ func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
 	handler := a.webHandler()
 	interceptors := handler.Interceptors()
 
+	var err error
+
 	for k, interceptor := range interceptors {
-		err := interceptor.Before(response, r)
+		err = interceptor.Before(response, r)
 
 		if err != nil {
-			a.err(err)
 			interceptors = interceptors[:k]
 			goto write
 		}
@@ -99,22 +100,28 @@ func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		handler.Get(response, r)
+		err = handler.Get(response, r)
 	case "POST":
-		handler.Post(response, r)
+		err = handler.Post(response, r)
 	default:
 		w.WriteHeader(http.StatusNotImplemented)
 	}
 
 write:
 	for k := len(interceptors) - 1; k >= 0; k-- {
-		interceptors[k].After(response, r)
+		err = interceptors[k].After(response, r)
 	}
 
-	if len(response.TemplateName) > 0 {
-		a.template.ExecuteTemplate(w, response.TemplateName, response.TemplateData)
-	} else {
-		a.template.Execute(w, response.TemplateData)
+	if err != nil {
+		if a.err != nil {
+			a.err(err)
+		}
+	} else if response.Written {
+		err = a.template.ExecuteTemplate(w, response.TemplateName, response.TemplateData)
+
+		if err != nil && a.err != nil {
+			a.err(err)
+		}
 	}
 }
 

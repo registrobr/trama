@@ -2,6 +2,7 @@ package trama
 
 import (
 	"net/http"
+	"path"
 )
 
 type ResponseWriter struct {
@@ -33,8 +34,7 @@ func (w *ResponseWriter) Status() int {
 
 type Response interface {
 	Redirect(url string, statusCode int)
-	SetTemplate(name string)
-	SetTemplateData(data interface{})
+	SetTemplate(name string, data interface{})
 }
 
 type TramaResponse struct {
@@ -42,17 +42,18 @@ type TramaResponse struct {
 	RedirectStatusCode int
 	TemplateName       string
 	TemplateData       interface{}
+	Written            bool
 }
 
 func (t *TramaResponse) Redirect(url string, statusCode int) {
+	t.Written = true
 	t.RedirectURL = url
 	t.RedirectStatusCode = statusCode
 }
 
-func (t *TramaResponse) SetTemplate(name string) {
-	t.TemplateName = name
-}
-
-func (t *TramaResponse) SetTemplateData(data interface{}) {
+func (t *TramaResponse) SetTemplate(name string, data interface{}) {
+	t.Written = true
+	_, filename := path.Split(name)
+	t.TemplateName = filename
 	t.TemplateData = data
 }

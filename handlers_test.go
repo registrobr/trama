@@ -214,6 +214,106 @@ func TestServeWeb(t *testing.T) {
 	}
 }
 
+func TestServeAJAX(t *testing.T) {
+	data := []struct {
+		description  string
+		handleFunc   func(http.ResponseWriter, *http.Request)
+		interceptors AJAXInterceptorChain
+		httpMethod   string
+	}{
+		{
+			description: "It should handle the GET request properly",
+			httpMethod:  "GET",
+			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+		},
+		{
+			description: "It should handle the PUT request properly",
+			httpMethod:  "PUT",
+			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+		},
+		{
+			description: "It should handle the POST request properly",
+			httpMethod:  "POST",
+			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+		},
+		{
+			description: "It should handle the PATCH request properly",
+			httpMethod:  "PATCH",
+			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+		},
+		{
+			description: "It should handle the DELETE request properly",
+			httpMethod:  "DELETE",
+			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+		},
+		{
+			description: "It should handle the HEAD request properly",
+			httpMethod:  "HEAD",
+			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+		},
+		{
+			description: "It should handle the HEAD request with interceptors properly",
+			httpMethod:  "HEAD",
+			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+			interceptors: AJAXInterceptorChain{
+				&struct{ NopAJAXInterceptor }{},
+				&struct{ NopAJAXInterceptor }{},
+				&struct{ NopAJAXInterceptor }{},
+			},
+		},
+		{
+			description: "It should break at the interceptor's Before run",
+			httpMethod:  "HEAD",
+			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+			interceptors: AJAXInterceptorChain{
+				&struct{ NopAJAXInterceptor }{},
+				&brokenBeforeAJAXInterceptor{},
+				&struct{ NopAJAXInterceptor }{},
+			},
+		},
+	}
+
+	for i, item := range data {
+		handleFuncCalled := false
+		mock := &mockAJAXHandler{handleFunc: func(w http.ResponseWriter, r *http.Request) {
+			handleFuncCalled = true
+			item.handleFunc(w, r)
+		}}
+		handler := adapter{
+			ajaxHandler: func() AJAXHandler { return mock },
+			err: func(err error) {
+				t.Errorf("Item %d, “%s”, unexpected error found: %s", i, item.description, err)
+			},
+			uriVars: map[string]string{"param1": "1", "param2": "2"},
+		}
+
+		w := httptest.NewRecorder()
+		r, err := http.NewRequest(item.httpMethod, "", nil)
+
+		if err != nil {
+			t.Error(err)
+		}
+
+		handler.serveHTTP(w, r)
+
+		if mock.methodCalled != item.httpMethod {
+			t.Errorf("Item %d, “%s”, wrong method called. Expecting %s; found %s", i, item.description, item.httpMethod, mock.methodCalled)
+		}
+
+		if mock.Param1 != "1" {
+			t.Errorf("Item %d, “%s”, wrong param1. Expecting “1”; found “%s”", i, item.description, mock.Param1)
+		}
+
+		if mock.Param2 != 2 {
+			t.Errorf("Item %d, “%s”, wrong param1. Expecting “2”; found “%d”", i, item.description, mock.Param2)
+		}
+
+		if item.handleFunc != nil && !handleFuncCalled {
+			t.Errorf("Item %d, “%s”, not calling the handleFunc", i, item.description)
+		}
+	}
+}
+
 type mockWebHandler struct {
 	template1        *os.File
 	template1Content string
@@ -303,4 +403,62 @@ type brokenAfterInterceptor struct {
 
 func (b *brokenAfterInterceptor) After(Response, *http.Request) error {
 	return brokenAfterError
+}
+
+type mockAJAXHandler struct {
+	Param1       string `param:"param1"`
+	Param2       int    `param:"param2"`
+	handleFunc   func(http.ResponseWriter, *http.Request)
+	interceptors AJAXInterceptorChain
+	methodCalled string
+}
+
+func (m *mockAJAXHandler) Get(w http.ResponseWriter, r *http.Request) {
+	m.methodCalled = "GET"
+	m.handleFunc(w, r)
+}
+
+func (m *mockAJAXHandler) Post(w http.ResponseWriter, r *http.Request) {
+	m.methodCalled = "POST"
+	m.handleFunc(w, r)
+}
+
+func (m *mockAJAXHandler) Put(w http.ResponseWriter, r *http.Request) {
+	m.methodCalled = "PUT"
+	m.handleFunc(w, r)
+}
+
+func (m *mockAJAXHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	m.methodCalled = "DELETE"
+	m.handleFunc(w, r)
+}
+
+func (m *mockAJAXHandler) Patch(w http.ResponseWriter, r *http.Request) {
+	m.methodCalled = "PATCH"
+	m.handleFunc(w, r)
+}
+
+func (m *mockAJAXHandler) Head(w http.ResponseWriter, r *http.Request) {
+	m.methodCalled = "HEAD"
+	m.handleFunc(w, r)
+}
+
+func (m *mockAJAXHandler) Interceptors() AJAXInterceptorChain {
+	return m.interceptors
+}
+
+type brokenBeforeAJAXInterceptor struct {
+	NopAJAXInterceptor
+}
+
+func (b *brokenBeforeAJAXInterceptor) Before(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusInternalServerError)
+}
+
+type brokenAfterAJAXInterceptor struct {
+	NopAJAXInterceptor
+}
+
+func (b *brokenAfterAJAXInterceptor) After(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusInternalServerError)
 }

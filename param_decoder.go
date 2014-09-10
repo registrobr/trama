@@ -39,19 +39,19 @@ func (c paramDecoder) decode() {
 			case reflect.String:
 				s.SetString(param)
 			case reflect.Int:
-				i, err := strconv.ParseInt(param, 10, 0)
+				n, err := strconv.ParseInt(param, 10, 0)
 				if err != nil {
 					c.err(err)
 					continue
 				}
-				s.SetInt(i)
+				s.SetInt(n)
 			case reflect.Int64:
-				i, err := strconv.ParseInt(param, 10, 64)
+				n, err := strconv.ParseInt(param, 10, 64)
 				if err != nil {
 					c.err(err)
 					continue
 				}
-				s.SetInt(i)
+				s.SetInt(n)
 			}
 		}
 	}

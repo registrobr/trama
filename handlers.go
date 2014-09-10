@@ -93,6 +93,10 @@ func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
 		err = interceptor.Before(response, r)
 
 		if err != nil {
+			if a.err != nil {
+				a.err(err)
+			}
+
 			interceptors = interceptors[:k]
 			goto write
 		}
@@ -109,14 +113,18 @@ func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
 
 write:
 	for k := len(interceptors) - 1; k >= 0; k-- {
-		err = interceptors[k].After(response, r)
+		afterError := interceptors[k].After(response, r)
+
+		if afterError != nil {
+			if a.err != nil {
+				a.err(afterError)
+			}
+
+			err = afterError
+		}
 	}
 
-	if err != nil {
-		if a.err != nil {
-			a.err(err)
-		}
-	} else if response.Written {
+	if err == nil && response.Set {
 		err = a.template.ExecuteTemplate(w, response.TemplateName, response.TemplateData)
 
 		if err != nil && a.err != nil {

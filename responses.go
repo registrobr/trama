@@ -42,17 +42,17 @@ type TramaResponse struct {
 	RedirectStatusCode int
 	TemplateName       string
 	TemplateData       interface{}
-	Written            bool
+	Set                bool
 }
 
 func (t *TramaResponse) Redirect(url string, statusCode int) {
-	t.Written = true
+	t.Set = true
 	t.RedirectURL = url
 	t.RedirectStatusCode = statusCode
 }
 
 func (t *TramaResponse) SetTemplate(name string, data interface{}) {
-	t.Written = true
+	t.Set = true
 	_, filename := path.Split(name)
 	t.TemplateName = filename
 	t.TemplateData = data

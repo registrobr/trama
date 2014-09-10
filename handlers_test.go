@@ -20,6 +20,8 @@ func TestServeWeb(t *testing.T) {
 		content2        string
 		data2           interface{}
 		expectedResult2 string
+		interceptors    WebInterceptorChain
+		testStatusCode  bool
 	}{
 		{
 			description: "It should write the expected results",
@@ -61,6 +63,75 @@ func TestServeWeb(t *testing.T) {
 				(a manhã) que plana livre de armação.
 				A manhã, toldo de um tecido tão aéreo
 				que, tecido, se eleva por si: luz balão.`,
+			testStatusCode: true,
+		},
+		{
+			description: "It should write the expected results after running the interceptors",
+			content1: `
+				Um {{.Galo}} sozinho não tece uma manhã:
+				ele precisará sempre de outros {{.Galos}}.
+				De um que apanhe esse grito que ele
+				e o lance a outro; de um outro {{.Galo}}
+				que apanhe o grito de um {{.Galo}} antes
+				e o lance a outro; e de outros {{.Galos}}
+				que com muitos outros {{.Galos}} se cruzem
+				os fios de sol de seus gritos de {{.Galo}},
+				para que a manhã, desde uma teia tênue,
+				se vá tecendo, entre todos os {{.Galos}}.`,
+			data1: struct{ Galo, Galos string }{"galo", "galos"},
+			expectedResult1: `
+				Um galo sozinho não tece uma manhã:
+				ele precisará sempre de outros galos.
+				De um que apanhe esse grito que ele
+				e o lance a outro; de um outro galo
+				que apanhe o grito de um galo antes
+				e o lance a outro; e de outros galos
+				que com muitos outros galos se cruzem
+				os fios de sol de seus gritos de galo,
+				para que a manhã, desde uma teia tênue,
+				se vá tecendo, entre todos os galos.`,
+			content2: `
+				E se encorpando em tela, entre {{.Todos}},
+				se erguendo tenda, onde entrem {{.Todos}},
+				se entretendo para {{.Todos}}, no toldo
+				(a manhã) que plana livre de armação.
+				A manhã, toldo de um tecido tão aéreo
+				que, tecido, se eleva por si: luz balão.`,
+			data2: struct{ Todos string }{"todos"},
+			expectedResult2: `
+				E se encorpando em tela, entre todos,
+				se erguendo tenda, onde entrem todos,
+				se entretendo para todos, no toldo
+				(a manhã) que plana livre de armação.
+				A manhã, toldo de um tecido tão aéreo
+				que, tecido, se eleva por si: luz balão.`,
+			testStatusCode: true,
+			interceptors: WebInterceptorChain{
+				&struct{ NopWebInterceptor }{},
+				&struct{ NopWebInterceptor }{},
+				&struct{ NopWebInterceptor }{},
+			},
+		},
+		{
+			description:     "It should break at the interceptor's Before run",
+			content1:        "Tecendo a manhã",
+			expectedResult1: "",
+			interceptors: WebInterceptorChain{
+				&struct{ NopWebInterceptor }{},
+				&brokenBeforeInterceptor{},
+				&struct{ NopWebInterceptor }{},
+			},
+		},
+		{
+			description:     "It should break at the interceptor's After run",
+			content1:        "Tecendo a manhã",
+			expectedResult1: "",
+			interceptors: WebInterceptorChain{
+				&struct{ NopWebInterceptor }{},
+				&brokenAfterInterceptor{},
+				&struct{ NopWebInterceptor }{},
+			},
+			testStatusCode: true,
 		},
 	}
 
@@ -70,6 +141,7 @@ func TestServeWeb(t *testing.T) {
 			template1Data:    item.data1,
 			template2Content: item.content2,
 			template2Data:    item.data2,
+			interceptors:     item.interceptors,
 		}
 
 		defer mock.closeTemplates()
@@ -83,7 +155,12 @@ func TestServeWeb(t *testing.T) {
 		handler := adapter{
 			webHandler: func() WebHandler { return mock },
 			err: func(err error) {
-				t.Errorf("Item %d, “%s”, unexpected error: “%s”", i, item.description, err)
+				notBeforeError := err.Error() != brokenBeforeError.Error()
+				notAfterError := err.Error() != brokenAfterError.Error()
+
+				if notBeforeError && notAfterError {
+					t.Errorf("Item %d, “%s”, unexpected error: “%s”", i, item.description, err)
+				}
 			},
 			template: templ,
 		}
@@ -97,7 +174,7 @@ func TestServeWeb(t *testing.T) {
 
 		handler.serveHTTP(w, r)
 
-		if w.Code != http.StatusOK {
+		if item.testStatusCode && w.Code != http.StatusOK {
 			t.Errorf("Item %d, “%s”, wrong status code. Expecting 200; found %d", i, item.description, w.Code)
 		}
 
@@ -114,7 +191,7 @@ func TestServeWeb(t *testing.T) {
 
 		handler.serveHTTP(w, r)
 
-		if w.Code != http.StatusOK {
+		if item.testStatusCode && w.Code != http.StatusOK {
 			t.Errorf("Item %d, “%s”, wrong status code. Expecting 200; found %d", i, item.description, w.Code)
 		}
 
@@ -131,20 +208,20 @@ func TestServeWeb(t *testing.T) {
 
 		handler.serveHTTP(w, r)
 
-		if w.Code != http.StatusNotImplemented {
+		if item.testStatusCode && w.Code != http.StatusNotImplemented {
 			t.Errorf("Item %d, “%s”, wrong status code. Expecting %d; found %d", i, item.description, http.StatusNotImplemented, w.Code)
 		}
 	}
 }
 
 type mockWebHandler struct {
-	NopWebInterceptorChain
 	template1        *os.File
 	template1Content string
 	template1Data    interface{}
 	template2        *os.File
 	template2Content string
 	template2Data    interface{}
+	interceptors     WebInterceptorChain
 }
 
 func (m *mockWebHandler) closeTemplates() {
@@ -201,4 +278,29 @@ func (m *mockWebHandler) Templates() []string {
 	}
 
 	return []string{m.template1.Name(), m.template2.Name()}
+}
+
+func (m *mockWebHandler) Interceptors() WebInterceptorChain {
+	return m.interceptors
+}
+
+type brokenBeforeInterceptor struct {
+	NopWebInterceptor
+}
+
+var (
+	brokenBeforeError = errors.New("Error from a broken Before implementation of a web interceptor")
+	brokenAfterError  = errors.New("Error from a broken After implementation of a web interceptor")
+)
+
+func (b *brokenBeforeInterceptor) Before(Response, *http.Request) error {
+	return brokenBeforeError
+}
+
+type brokenAfterInterceptor struct {
+	NopWebInterceptor
+}
+
+func (b *brokenAfterInterceptor) After(Response, *http.Request) error {
+	return brokenAfterError
 }

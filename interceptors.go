@@ -38,8 +38,23 @@ func (n *NopWebInterceptorChain) Interceptors() WebInterceptorChain {
 	return NewWebInterceptorChain()
 }
 
+type NopWebInterceptor struct{}
+
+func (n *NopWebInterceptor) Before(Response, *http.Request) error {
+	return nil
+}
+
+func (n *NopWebInterceptor) After(Response, *http.Request) error {
+	return nil
+}
+
 type NopAJAXInterceptorChain struct{}
 
 func (n *NopAJAXInterceptorChain) Interceptors() AJAXInterceptorChain {
 	return NewAJAXInterceptorChain()
 }
+
+type NopAJAXInterceptor struct{}
+
+func (n *NopAJAXInterceptor) Before(w http.ResponseWriter, r *http.Request) {}
+func (n *NopAJAXInterceptor) After(w http.ResponseWriter, r *http.Request)  {}

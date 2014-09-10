@@ -216,69 +216,80 @@ func TestServeWeb(t *testing.T) {
 
 func TestServeAJAX(t *testing.T) {
 	data := []struct {
-		description  string
-		handleFunc   func(http.ResponseWriter, *http.Request)
-		interceptors AJAXInterceptorChain
-		httpMethod   string
+		description           string
+		interceptors          AJAXInterceptorChain
+		httpMethod            string
+		expectedStatusCode    int
+		handlerShouldBeCalled bool
 	}{
 		{
-			description: "It should handle the GET request properly",
-			httpMethod:  "GET",
-			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+			description:           "It should handle the GET request properly",
+			httpMethod:            "GET",
+			expectedStatusCode:    http.StatusOK,
+			handlerShouldBeCalled: true,
 		},
 		{
-			description: "It should handle the PUT request properly",
-			httpMethod:  "PUT",
-			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+			description:           "It should handle the PUT request properly",
+			httpMethod:            "PUT",
+			expectedStatusCode:    http.StatusOK,
+			handlerShouldBeCalled: true,
 		},
 		{
-			description: "It should handle the POST request properly",
-			httpMethod:  "POST",
-			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+			description:           "It should handle the POST request properly",
+			httpMethod:            "POST",
+			expectedStatusCode:    http.StatusOK,
+			handlerShouldBeCalled: true,
 		},
 		{
-			description: "It should handle the PATCH request properly",
-			httpMethod:  "PATCH",
-			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+			description:           "It should handle the PATCH request properly",
+			httpMethod:            "PATCH",
+			expectedStatusCode:    http.StatusOK,
+			handlerShouldBeCalled: true,
 		},
 		{
-			description: "It should handle the DELETE request properly",
-			httpMethod:  "DELETE",
-			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+			description:           "It should handle the DELETE request properly",
+			httpMethod:            "DELETE",
+			expectedStatusCode:    http.StatusOK,
+			handlerShouldBeCalled: true,
 		},
 		{
-			description: "It should handle the HEAD request properly",
-			httpMethod:  "HEAD",
-			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+			description:           "It should handle the HEAD request properly",
+			httpMethod:            "HEAD",
+			expectedStatusCode:    http.StatusOK,
+			handlerShouldBeCalled: true,
 		},
 		{
-			description: "It should handle the HEAD request with interceptors properly",
-			httpMethod:  "HEAD",
-			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+			description:        "It should handle the HEAD request with interceptors properly",
+			httpMethod:         "HEAD",
+			expectedStatusCode: http.StatusOK,
 			interceptors: AJAXInterceptorChain{
 				&struct{ NopAJAXInterceptor }{},
 				&struct{ NopAJAXInterceptor }{},
 				&struct{ NopAJAXInterceptor }{},
 			},
+			handlerShouldBeCalled: true,
 		},
 		{
-			description: "It should break at the interceptor's Before run",
-			httpMethod:  "HEAD",
-			handleFunc:  func(http.ResponseWriter, *http.Request) {},
+			description:        "It should break at the interceptor's Before run and not run the handler's method",
+			httpMethod:         "HEAD",
+			expectedStatusCode: http.StatusInternalServerError,
 			interceptors: AJAXInterceptorChain{
 				&struct{ NopAJAXInterceptor }{},
 				&brokenBeforeAJAXInterceptor{},
 				&struct{ NopAJAXInterceptor }{},
 			},
+			handlerShouldBeCalled: false,
 		},
 	}
 
 	for i, item := range data {
 		handleFuncCalled := false
-		mock := &mockAJAXHandler{handleFunc: func(w http.ResponseWriter, r *http.Request) {
-			handleFuncCalled = true
-			item.handleFunc(w, r)
-		}}
+		mock := &mockAJAXHandler{
+			handleFunc: func(http.ResponseWriter, *http.Request) {
+				handleFuncCalled = true
+			},
+			interceptors: item.interceptors,
+		}
 		handler := adapter{
 			ajaxHandler: func() AJAXHandler { return mock },
 			err: func(err error) {
@@ -296,8 +307,14 @@ func TestServeAJAX(t *testing.T) {
 
 		handler.serveHTTP(w, r)
 
-		if mock.methodCalled != item.httpMethod {
-			t.Errorf("Item %d, “%s”, wrong method called. Expecting %s; found %s", i, item.description, item.httpMethod, mock.methodCalled)
+		if item.handlerShouldBeCalled {
+			if !handleFuncCalled {
+				t.Errorf("Item %d, “%s”, not calling handler", i, item.description)
+			} else {
+				if mock.methodCalled != item.httpMethod {
+					t.Errorf("Item %d, “%s”, wrong method called. Expecting %s; found %s", i, item.description, item.httpMethod, mock.methodCalled)
+				}
+			}
 		}
 
 		if mock.Param1 != "1" {
@@ -308,8 +325,8 @@ func TestServeAJAX(t *testing.T) {
 			t.Errorf("Item %d, “%s”, wrong param1. Expecting “2”; found “%d”", i, item.description, mock.Param2)
 		}
 
-		if item.handleFunc != nil && !handleFuncCalled {
-			t.Errorf("Item %d, “%s”, not calling the handleFunc", i, item.description)
+		if w.Code != item.expectedStatusCode {
+			t.Errorf("Item %d, “%s”, wrong status code. Expecting %d; found %d", i, item.description, item.expectedStatusCode, w.Code)
 		}
 	}
 }

@@ -9,7 +9,8 @@ func TestDecoder(t *testing.T) {
 	type testStr struct {
 		Name      string `param:"nome"`
 		Number    int    `param:"número"`
-		BigNumber int64  `param:"numerão"`
+		NotTagged int
+		BigNumber int64 `param:"numerão"`
 	}
 
 	data := []struct {
@@ -29,6 +30,18 @@ func TestDecoder(t *testing.T) {
 			result: testStr{
 				Name:      "Dezessete",
 				Number:    17,
+				BigNumber: 137438953472,
+			},
+		},
+		{
+			description: "It should leave Number blank",
+			uriParams: map[string]string{
+				"nome":    "Dezessete",
+				"numerão": "137438953472",
+			},
+			result: testStr{
+				Name:      "Dezessete",
+				Number:    0,
 				BigNumber: 137438953472,
 			},
 		},

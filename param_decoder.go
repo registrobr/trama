@@ -1,10 +1,8 @@
 package trama
 
 import (
-	"net/http"
 	"reflect"
 	"strconv"
-	"strings"
 )
 
 type paramDecoder struct {
@@ -17,24 +15,8 @@ func newParamDecoder(h interface{}, uriParams map[string]string, errorFunc func(
 	return paramDecoder{structure: h, uriParams: uriParams, err: errorFunc}
 }
 
-func (c *paramDecoder) decode(r *http.Request) {
+func (c paramDecoder) decode() {
 	st := reflect.ValueOf(c.structure).Elem()
-	c.unmarshalURIParams(st)
-
-	m := strings.ToLower(r.Method)
-	for i := 0; i < st.NumField(); i++ {
-		field := st.Type().Field(i)
-		value := field.Tag.Get("request")
-		if value == "all" || strings.Contains(value, m) {
-			c.unmarshalURIParams(st.Field(i))
-		}
-	}
-}
-
-func (c *paramDecoder) unmarshalURIParams(st reflect.Value) {
-	if st.Kind() == reflect.Ptr {
-		return
-	}
 
 	for i := 0; i < st.NumField(); i++ {
 		field := st.Type().Field(i)
@@ -45,11 +27,13 @@ func (c *paramDecoder) unmarshalURIParams(st reflect.Value) {
 		}
 
 		param, ok := c.uriParams[value]
+
 		if !ok {
 			continue
 		}
 
-		s := st.FieldByName(field.Name)
+		s := st.Field(i)
+
 		if s.IsValid() && s.CanSet() {
 			switch field.Type.Kind() {
 			case reflect.String:

@@ -120,11 +120,8 @@ write:
 
 func (a adapter) serveAJAX(rw http.ResponseWriter, r *http.Request) {
 	w := &ResponseWriter{ResponseWriter: rw}
-
 	handler := a.ajaxHandler()
-	paramsDecoder := newParamDecoder(handler, a.uriVars, a.err)
-	paramsDecoder.decode(r)
-
+	newParamDecoder(handler, a.uriVars, a.err).decode()
 	interceptors := handler.Interceptors()
 
 	for k, interceptor := range interceptors {

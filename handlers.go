@@ -10,6 +10,7 @@ type WebHandler interface {
 	Post(Response, *http.Request) error
 	Interceptors() WebInterceptorChain
 	Templates() []string
+	TemplatesFunc() template.FuncMap
 }
 
 type AJAXHandler interface {
@@ -35,6 +36,10 @@ func (d *DefaultWebHandler) Post(Response, *http.Request) error {
 }
 
 func (d *DefaultWebHandler) Templates() []string {
+	return nil
+}
+
+func (d *DefaultWebHandler) TemplatesFunc() template.FuncMap {
 	return nil
 }
 

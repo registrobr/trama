@@ -28,7 +28,7 @@ func TestServeWeb(t *testing.T) {
 			content1: `
 				Um {{.Galo}} sozinho não tece uma manhã:
 				ele precisará sempre de outros {{.Galos}}.
-				De um que apanhe esse grito que ele
+				De um que {{myFunc "apanhe"}} esse grito que ele
 				e o lance a outro; de um outro {{.Galo}}
 				que apanhe o grito de um {{.Galo}} antes
 				e o lance a outro; e de outros {{.Galos}}
@@ -40,7 +40,7 @@ func TestServeWeb(t *testing.T) {
 			expectedResult1: `
 				Um galo sozinho não tece uma manhã:
 				ele precisará sempre de outros galos.
-				De um que apanhe esse grito que ele
+				De um que <<confidential>> esse grito que ele
 				e o lance a outro; de um outro galo
 				que apanhe o grito de um galo antes
 				e o lance a outro; e de outros galos
@@ -146,7 +146,7 @@ func TestServeWeb(t *testing.T) {
 
 		defer mock.closeTemplates()
 		templatesNames := mock.Templates()
-		templ, err := template.ParseFiles(templatesNames...)
+		templ, err := template.New("mock").Funcs(mock.TemplatesFunc()).ParseFiles(templatesNames...)
 
 		if err != nil {
 			t.Fatalf("Item %d, “%s”, unexpected error: “%s”", i, item.description, err)
@@ -373,31 +373,26 @@ func (m *mockWebHandler) Post(res Response, req *http.Request) error {
 }
 
 func (m *mockWebHandler) Templates() []string {
-	f, err := ioutil.TempFile("", "mockWebHandler")
+	var err error
 
+	m.template1, err = ioutil.TempFile("", "mockWebHandler")
 	if err != nil {
+		println(err.Error())
 		return nil
 	}
-
-	m.template1 = f
 
 	m.template2, err = ioutil.TempFile("", "mockWebHandler")
-
 	if err != nil {
 		println(err.Error())
 		return nil
 	}
 
-	_, err = io.WriteString(m.template1, m.template1Content)
-
-	if err != nil {
+	if _, err = io.WriteString(m.template1, m.template1Content); err != nil {
 		println(err.Error())
 		return nil
 	}
 
-	_, err = io.WriteString(m.template2, m.template2Content)
-
-	if err != nil {
+	if _, err = io.WriteString(m.template2, m.template2Content); err != nil {
 		println(err.Error())
 		return nil
 	}
@@ -407,6 +402,14 @@ func (m *mockWebHandler) Templates() []string {
 
 func (m *mockWebHandler) Interceptors() WebInterceptorChain {
 	return m.interceptors
+}
+
+func (m *mockWebHandler) TemplatesFunc() template.FuncMap {
+	return template.FuncMap{
+		"myFunc": func(value string) string {
+			return "<<confidential>>"
+		},
+	}
 }
 
 type brokenBeforeInterceptor struct {

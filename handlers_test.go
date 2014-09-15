@@ -199,6 +199,10 @@ func TestServeWeb(t *testing.T) {
 			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%s”;\nfound “%s”", i, item.description, item.expectedResult2, item.content2)
 		}
 
+		if item.testStatusCode && w.Header().Get("Set-Cookie") != "cookie1=value1" {
+			t.Errorf("Item %d, “%s”, unexpected result. Expecting “cookie1=value1”;\nfound “%s”", i, item.description, w.Header().Get("Set-Cookie"))
+		}
+
 		w = httptest.NewRecorder()
 		r, err = http.NewRequest("DELETE", "/uri", nil)
 
@@ -360,6 +364,10 @@ func (m *mockWebHandler) Post(res Response, req *http.Request) error {
 		return errors.New("Template 2 not set")
 	}
 
+	res.SetCookie(&http.Cookie{
+		Name:  "cookie1",
+		Value: "value1",
+	})
 	res.SetTemplate(m.template2.Name(), m.template2Data)
 	return nil
 }

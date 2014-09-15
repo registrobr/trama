@@ -35,6 +35,7 @@ func (w *ResponseWriter) Status() int {
 type Response interface {
 	Redirect(url string, statusCode int)
 	SetTemplate(name string, data interface{})
+	SetCookie(cookie *http.Cookie)
 }
 
 type TramaResponse struct {
@@ -43,6 +44,7 @@ type TramaResponse struct {
 	TemplateName       string
 	TemplateData       interface{}
 	Set                bool
+	Cookies            []*http.Cookie
 }
 
 func (t *TramaResponse) Redirect(url string, statusCode int) {
@@ -56,4 +58,8 @@ func (t *TramaResponse) SetTemplate(name string, data interface{}) {
 	_, filename := path.Split(name)
 	t.TemplateName = filename
 	t.TemplateData = data
+}
+
+func (t *TramaResponse) SetCookie(cookie *http.Cookie) {
+	t.Cookies = append(t.Cookies, cookie)
 }

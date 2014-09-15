@@ -124,6 +124,10 @@ write:
 		}
 	}
 
+	for _, cookie := range response.Cookies {
+		http.SetCookie(w, cookie)
+	}
+
 	if err == nil && response.Set {
 		err = a.template.ExecuteTemplate(w, response.TemplateName, response.TemplateData)
 

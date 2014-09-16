@@ -134,10 +134,14 @@ write:
 	}
 
 	if err == nil && response.Set {
-		err = a.template.ExecuteTemplate(w, response.TemplateName, response.TemplateData)
+		if response.RedirectURL != "" {
+			http.Redirect(w, r, response.RedirectURL, response.RedirectStatusCode)
 
-		if err != nil && a.err != nil {
-			a.err(err)
+		} else {
+			err = a.template.ExecuteTemplate(w, response.TemplateName, response.TemplateData)
+			if err != nil && a.err != nil {
+				a.err(err)
+			}
 		}
 	}
 }

@@ -40,7 +40,7 @@ func TestServeWeb(t *testing.T) {
 			expectedResult1: `
 				Um galo sozinho não tece uma manhã:
 				ele precisará sempre de outros galos.
-				De um que <<confidential>> esse grito que ele
+				De um que !confidential! esse grito que ele
 				e o lance a outro; de um outro galo
 				que apanhe o grito de um galo antes
 				e o lance a outro; e de outros galos
@@ -179,7 +179,7 @@ func TestServeWeb(t *testing.T) {
 		}
 
 		if w.Body.String() != item.expectedResult1 {
-			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%s”;\nfound “%s”", i, item.description, item.expectedResult1, item.content1)
+			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%s”;\nfound “%s”", i, item.description, item.expectedResult1, w.Body.String())
 		}
 
 		w = httptest.NewRecorder()
@@ -196,7 +196,7 @@ func TestServeWeb(t *testing.T) {
 		}
 
 		if w.Body.String() != item.expectedResult2 {
-			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%s”;\nfound “%s”", i, item.description, item.expectedResult2, item.content2)
+			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%s”;\nfound “%s”", i, item.description, item.expectedResult2, w.Body.String())
 		}
 
 		if item.testStatusCode && w.Header().Get("Set-Cookie") != "cookie1=value1" {
@@ -407,7 +407,7 @@ func (m *mockWebHandler) Interceptors() WebInterceptorChain {
 func (m *mockWebHandler) TemplatesFunc() template.FuncMap {
 	return template.FuncMap{
 		"myFunc": func(value string) string {
-			return "<<confidential>>"
+			return "!confidential!"
 		},
 	}
 }

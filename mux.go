@@ -46,7 +46,13 @@ func (t *trama) RegisterPage(uri string, h webHandlerConstructor) {
 		templ.Delims(t.templateDelims[0], t.templateDelims[1])
 	}
 
-	handlerTemplates := h().Templates()
+	handler := h()
+
+	if funcMap := handler.TemplatesFunc(); funcMap != nil {
+		templ = templ.Funcs(funcMap)
+	}
+
+	handlerTemplates := handler.Templates()
 
 	if len(handlerTemplates) > 0 {
 		files := make([]string, 0, len(t.GlobalTemplates)+len(handlerTemplates))

@@ -13,22 +13,26 @@ import (
 
 func TestServeWeb(t *testing.T) {
 	data := []struct {
-		description     string
-		content1        string
-		data1           interface{}
-		expectedResult1 string
-		content2        string
-		data2           interface{}
-		expectedResult2 string
-		interceptors    WebInterceptorChain
-		testStatusCode  bool
+		description string
+
+		contentGet        string
+		dataGet           interface{}
+		expectedResultGet string
+		redirectURL       string
+
+		contentPost        string
+		dataPost           interface{}
+		expectedResultPost string
+
+		interceptors   WebInterceptorChain
+		testStatusCode bool
 	}{
 		{
 			description: "It should write the expected results",
-			content1: `
+			contentGet: `
 				Um {{.Galo}} sozinho não tece uma manhã:
 				ele precisará sempre de outros {{.Galos}}.
-				De um que apanhe esse grito que ele
+				De um que {{myFunc "apanhe"}} esse grito que ele
 				e o lance a outro; de um outro {{.Galo}}
 				que apanhe o grito de um {{.Galo}} antes
 				e o lance a outro; e de outros {{.Galos}}
@@ -36,11 +40,11 @@ func TestServeWeb(t *testing.T) {
 				os fios de sol de seus gritos de {{.Galo}},
 				para que a manhã, desde uma teia tênue,
 				se vá tecendo, entre todos os {{.Galos}}.`,
-			data1: struct{ Galo, Galos string }{"galo", "galos"},
-			expectedResult1: `
+			dataGet: struct{ Galo, Galos string }{"galo", "galos"},
+			expectedResultGet: `
 				Um galo sozinho não tece uma manhã:
 				ele precisará sempre de outros galos.
-				De um que apanhe esse grito que ele
+				De um que !confidential! esse grito que ele
 				e o lance a outro; de um outro galo
 				que apanhe o grito de um galo antes
 				e o lance a outro; e de outros galos
@@ -48,15 +52,15 @@ func TestServeWeb(t *testing.T) {
 				os fios de sol de seus gritos de galo,
 				para que a manhã, desde uma teia tênue,
 				se vá tecendo, entre todos os galos.`,
-			content2: `
+			contentPost: `
 				E se encorpando em tela, entre {{.Todos}},
 				se erguendo tenda, onde entrem {{.Todos}},
 				se entretendo para {{.Todos}}, no toldo
 				(a manhã) que plana livre de armação.
 				A manhã, toldo de um tecido tão aéreo
 				que, tecido, se eleva por si: luz balão.`,
-			data2: struct{ Todos string }{"todos"},
-			expectedResult2: `
+			dataPost: struct{ Todos string }{"todos"},
+			expectedResultPost: `
 				E se encorpando em tela, entre todos,
 				se erguendo tenda, onde entrem todos,
 				se entretendo para todos, no toldo
@@ -67,7 +71,7 @@ func TestServeWeb(t *testing.T) {
 		},
 		{
 			description: "It should write the expected results after running the interceptors",
-			content1: `
+			contentGet: `
 				Um {{.Galo}} sozinho não tece uma manhã:
 				ele precisará sempre de outros {{.Galos}}.
 				De um que apanhe esse grito que ele
@@ -78,8 +82,8 @@ func TestServeWeb(t *testing.T) {
 				os fios de sol de seus gritos de {{.Galo}},
 				para que a manhã, desde uma teia tênue,
 				se vá tecendo, entre todos os {{.Galos}}.`,
-			data1: struct{ Galo, Galos string }{"galo", "galos"},
-			expectedResult1: `
+			dataGet: struct{ Galo, Galos string }{"galo", "galos"},
+			expectedResultGet: `
 				Um galo sozinho não tece uma manhã:
 				ele precisará sempre de outros galos.
 				De um que apanhe esse grito que ele
@@ -90,15 +94,15 @@ func TestServeWeb(t *testing.T) {
 				os fios de sol de seus gritos de galo,
 				para que a manhã, desde uma teia tênue,
 				se vá tecendo, entre todos os galos.`,
-			content2: `
+			contentPost: `
 				E se encorpando em tela, entre {{.Todos}},
 				se erguendo tenda, onde entrem {{.Todos}},
 				se entretendo para {{.Todos}}, no toldo
 				(a manhã) que plana livre de armação.
 				A manhã, toldo de um tecido tão aéreo
 				que, tecido, se eleva por si: luz balão.`,
-			data2: struct{ Todos string }{"todos"},
-			expectedResult2: `
+			dataPost: struct{ Todos string }{"todos"},
+			expectedResultPost: `
 				E se encorpando em tela, entre todos,
 				se erguendo tenda, onde entrem todos,
 				se entretendo para todos, no toldo
@@ -113,9 +117,9 @@ func TestServeWeb(t *testing.T) {
 			},
 		},
 		{
-			description:     "It should break at the interceptor's Before run",
-			content1:        "Tecendo a manhã",
-			expectedResult1: "",
+			description:       "It should break at the interceptor's Before run",
+			contentGet:        "Tecendo a manhã",
+			expectedResultGet: "",
 			interceptors: WebInterceptorChain{
 				&struct{ NopWebInterceptor }{},
 				&brokenBeforeInterceptor{},
@@ -123,9 +127,9 @@ func TestServeWeb(t *testing.T) {
 			},
 		},
 		{
-			description:     "It should break at the interceptor's After run",
-			content1:        "Tecendo a manhã",
-			expectedResult1: "",
+			description:       "It should break at the interceptor's After run",
+			contentGet:        "Tecendo a manhã",
+			expectedResultGet: "",
 			interceptors: WebInterceptorChain{
 				&struct{ NopWebInterceptor }{},
 				&brokenAfterInterceptor{},
@@ -133,20 +137,27 @@ func TestServeWeb(t *testing.T) {
 			},
 			testStatusCode: true,
 		},
+		{
+			description:       "It should redirect when necessary",
+			redirectURL:       "/test",
+			expectedResultGet: "<a href=\"/test\">Found</a>.\n\n",
+			testStatusCode:    false,
+		},
 	}
 
 	for i, item := range data {
 		mock := &mockWebHandler{
-			template1Content: item.content1,
-			template1Data:    item.data1,
-			template2Content: item.content2,
-			template2Data:    item.data2,
-			interceptors:     item.interceptors,
+			templateGetContent:     item.contentGet,
+			templateGetData:        item.dataGet,
+			templateGetRedirectURL: item.redirectURL,
+			templatePostContent:    item.contentPost,
+			templatePostData:       item.dataPost,
+			interceptors:           item.interceptors,
 		}
 
 		defer mock.closeTemplates()
 		templatesNames := mock.Templates()
-		templ, err := template.ParseFiles(templatesNames...)
+		templ, err := template.New("mock").Funcs(mock.TemplatesFunc()).ParseFiles(templatesNames...)
 
 		if err != nil {
 			t.Fatalf("Item %d, “%s”, unexpected error: “%s”", i, item.description, err)
@@ -176,10 +187,13 @@ func TestServeWeb(t *testing.T) {
 
 		if item.testStatusCode && w.Code != http.StatusOK {
 			t.Errorf("Item %d, “%s”, wrong status code. Expecting 200; found %d", i, item.description, w.Code)
+
+		} else if item.redirectURL != "" && w.Code != http.StatusFound {
+			t.Errorf("Item %d, “%s”, wrong status code. Expecting 302; found %d", i, item.description, w.Code)
 		}
 
-		if w.Body.String() != item.expectedResult1 {
-			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%s”;\nfound “%s”", i, item.description, item.expectedResult1, item.content1)
+		if w.Body.String() != item.expectedResultGet {
+			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%s”;\nfound “%s”", i, item.description, item.expectedResultGet, w.Body.String())
 		}
 
 		w = httptest.NewRecorder()
@@ -195,8 +209,12 @@ func TestServeWeb(t *testing.T) {
 			t.Errorf("Item %d, “%s”, wrong status code. Expecting 200; found %d", i, item.description, w.Code)
 		}
 
-		if w.Body.String() != item.expectedResult2 {
-			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%s”;\nfound “%s”", i, item.description, item.expectedResult2, item.content2)
+		if w.Body.String() != item.expectedResultPost {
+			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%s”;\nfound “%s”", i, item.description, item.expectedResultPost, w.Body.String())
+		}
+
+		if item.testStatusCode && w.Header().Get("Set-Cookie") != "cookie1=value1" {
+			t.Errorf("Item %d, “%s”, unexpected result. Expecting “cookie1=value1”;\nfound “%s”", i, item.description, w.Header().Get("Set-Cookie"))
 		}
 
 		w = httptest.NewRecorder()
@@ -332,73 +350,86 @@ func TestServeAJAX(t *testing.T) {
 }
 
 type mockWebHandler struct {
-	template1        *os.File
-	template1Content string
-	template1Data    interface{}
-	template2        *os.File
-	template2Content string
-	template2Data    interface{}
-	interceptors     WebInterceptorChain
+	templateGet            *os.File
+	templateGetContent     string
+	templateGetData        interface{}
+	templateGetRedirectURL string
+
+	templatePost        *os.File
+	templatePostContent string
+	templatePostData    interface{}
+
+	interceptors WebInterceptorChain
 }
 
 func (m *mockWebHandler) closeTemplates() {
-	m.template1.Close()
-	m.template2.Close()
+	m.templateGet.Close()
+	m.templatePost.Close()
 }
 
 func (m *mockWebHandler) Get(res Response, req *http.Request) error {
-	if m.template1 == nil {
-		return errors.New("Template 1 not set")
+	if m.templateGetRedirectURL != "" {
+		res.Redirect(m.templateGetRedirectURL, http.StatusFound)
+
+	} else if m.templateGet == nil {
+		return errors.New("Template GET not set")
 	}
 
-	res.SetTemplate(m.template1.Name(), m.template1Data)
+	res.SetTemplate(m.templateGet.Name(), m.templateGetData)
 	return nil
 }
 
 func (m *mockWebHandler) Post(res Response, req *http.Request) error {
-	if m.template2 == nil {
-		return errors.New("Template 2 not set")
+	if m.templatePost == nil {
+		return errors.New("Template POST not set")
 	}
 
-	res.SetTemplate(m.template2.Name(), m.template2Data)
+	res.SetCookie(&http.Cookie{
+		Name:  "cookie1",
+		Value: "value1",
+	})
+	res.SetTemplate(m.templatePost.Name(), m.templatePostData)
 	return nil
 }
 
 func (m *mockWebHandler) Templates() []string {
-	f, err := ioutil.TempFile("", "mockWebHandler")
+	var err error
 
-	if err != nil {
-		return nil
-	}
-
-	m.template1 = f
-
-	m.template2, err = ioutil.TempFile("", "mockWebHandler")
-
+	m.templateGet, err = ioutil.TempFile("", "mockWebHandler")
 	if err != nil {
 		println(err.Error())
 		return nil
 	}
 
-	_, err = io.WriteString(m.template1, m.template1Content)
-
+	m.templatePost, err = ioutil.TempFile("", "mockWebHandler")
 	if err != nil {
 		println(err.Error())
 		return nil
 	}
 
-	_, err = io.WriteString(m.template2, m.template2Content)
-
-	if err != nil {
+	if _, err = io.WriteString(m.templateGet, m.templateGetContent); err != nil {
 		println(err.Error())
 		return nil
 	}
 
-	return []string{m.template1.Name(), m.template2.Name()}
+	if _, err = io.WriteString(m.templatePost, m.templatePostContent); err != nil {
+		println(err.Error())
+		return nil
+	}
+
+	return []string{m.templateGet.Name(), m.templatePost.Name()}
 }
 
 func (m *mockWebHandler) Interceptors() WebInterceptorChain {
 	return m.interceptors
+}
+
+func (m *mockWebHandler) TemplatesFunc() template.FuncMap {
+	return template.FuncMap{
+		"myFunc": func(value string) string {
+			return "!confidential!"
+		},
+	}
 }
 
 type brokenBeforeInterceptor struct {

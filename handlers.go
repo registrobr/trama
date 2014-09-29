@@ -10,6 +10,7 @@ type WebHandler interface {
 	Post(Response, *http.Request) error
 	Interceptors() WebInterceptorChain
 	Templates() []string
+	TemplatesFunc() template.FuncMap
 }
 
 type AJAXHandler interface {
@@ -35,6 +36,10 @@ func (d *DefaultWebHandler) Post(Response, *http.Request) error {
 }
 
 func (d *DefaultWebHandler) Templates() []string {
+	return nil
+}
+
+func (d *DefaultWebHandler) TemplatesFunc() template.FuncMap {
 	return nil
 }
 
@@ -124,11 +129,19 @@ write:
 		}
 	}
 
-	if err == nil && response.Set {
-		err = a.template.ExecuteTemplate(w, response.TemplateName, response.TemplateData)
+	for _, cookie := range response.Cookies {
+		http.SetCookie(w, cookie)
+	}
 
-		if err != nil && a.err != nil {
-			a.err(err)
+	if err == nil && response.Set {
+		if response.RedirectURL != "" {
+			http.Redirect(w, r, response.RedirectURL, response.RedirectStatusCode)
+
+		} else {
+			err = a.template.ExecuteTemplate(w, response.TemplateName, response.TemplateData)
+			if err != nil && a.err != nil {
+				a.err(err)
+			}
 		}
 	}
 }

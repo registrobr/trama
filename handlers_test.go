@@ -447,16 +447,16 @@ var (
 	brokenAfterError  = errors.New("Error from a broken After implementation of a web interceptor")
 )
 
-func (b *brokenBeforeInterceptor) Before(Response, *http.Request) error {
-	return brokenBeforeError
+func (b *brokenBeforeInterceptor) Before(r Response, _ *http.Request) {
+	r.Error(brokenBeforeError)
 }
 
 type brokenAfterInterceptor struct {
 	NopWebInterceptor
 }
 
-func (b *brokenAfterInterceptor) After(Response, *http.Request) error {
-	return brokenAfterError
+func (b *brokenAfterInterceptor) After(r Response, _ *http.Request) {
+	r.Error(brokenAfterError)
 }
 
 type mockAJAXHandler struct {

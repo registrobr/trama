@@ -6,8 +6,8 @@ import (
 )
 
 type WebHandler interface {
-	Get(Response, *http.Request) error
-	Post(Response, *http.Request) error
+	Get(Response, *http.Request)
+	Post(Response, *http.Request)
 	Interceptors() WebInterceptorChain
 	Templates() []string
 	TemplatesFunc() template.FuncMap
@@ -27,13 +27,9 @@ type DefaultWebHandler struct {
 	NopWebInterceptorChain
 }
 
-func (d *DefaultWebHandler) Get(Response, *http.Request) error {
-	return nil
-}
+func (d *DefaultWebHandler) Get(Response, *http.Request) {}
 
-func (d *DefaultWebHandler) Post(Response, *http.Request) error {
-	return nil
-}
+func (d *DefaultWebHandler) Post(Response, *http.Request) {}
 
 func (d *DefaultWebHandler) Templates() []string {
 	return nil
@@ -75,7 +71,7 @@ type adapter struct {
 	webHandler  webHandlerConstructor
 	ajaxHandler ajaxHandlerConstructor
 	uriVars     map[string]string
-	err         func(error)
+	log         func(error)
 	template    *template.Template
 }
 
@@ -88,20 +84,14 @@ func (a adapter) serveHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
-	response := &TramaResponse{}
+	response := &WebResponse{responseWriter: w, template: a.template}
 	handler := a.webHandler()
 	interceptors := handler.Interceptors()
 
-	var err error
-
 	for k, interceptor := range interceptors {
-		err = interceptor.Before(response, r)
+		interceptor.Before(response, r)
 
-		if err != nil {
-			if a.err != nil {
-				a.err(err)
-			}
-
+		if response.Written() {
 			interceptors = interceptors[:k]
 			goto write
 		}
@@ -109,47 +99,25 @@ func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		err = handler.Get(response, r)
+		handler.Get(response, r)
 	case "POST":
-		err = handler.Post(response, r)
+		handler.Post(response, r)
 	default:
 		w.WriteHeader(http.StatusNotImplemented)
 	}
 
 write:
 	for k := len(interceptors) - 1; k >= 0; k-- {
-		afterError := interceptors[k].After(response, r)
-
-		if afterError != nil {
-			if a.err != nil {
-				a.err(afterError)
-			}
-
-			err = afterError
-		}
+		interceptors[k].After(response, r)
 	}
 
-	for _, cookie := range response.Cookies {
-		http.SetCookie(w, cookie)
-	}
-
-	if err == nil && response.Set {
-		if response.RedirectURL != "" {
-			http.Redirect(w, r, response.RedirectURL, response.RedirectStatusCode)
-
-		} else {
-			err = a.template.ExecuteTemplate(w, response.TemplateName, response.TemplateData)
-			if err != nil && a.err != nil {
-				a.err(err)
-			}
-		}
-	}
+	response.Write()
 }
 
 func (a adapter) serveAJAX(rw http.ResponseWriter, r *http.Request) {
 	w := &ResponseWriter{ResponseWriter: rw}
 	handler := a.ajaxHandler()
-	newParamDecoder(handler, a.uriVars, a.err).decode()
+	newParamDecoder(handler, a.uriVars, a.log).decode()
 	interceptors := handler.Interceptors()
 
 	for k, interceptor := range interceptors {

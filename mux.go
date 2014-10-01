@@ -12,17 +12,17 @@ type trama struct {
 	router          router
 	templateDelims  []string
 	Recover         func(interface{})
-	Error           func(error)
+	Log             func(error)
 	GlobalTemplates []string
 }
 
-func New(errorFunc func(error)) *trama {
+func New(log func(error)) *trama {
 	t := &trama{router: newRouter()}
 
-	if errorFunc != nil {
-		t.Error = errorFunc
+	if log != nil {
+		t.Log = log
 	} else {
-		t.Error = func(e error) { println(e.Error()) }
+		t.Log = func(err error) { println(err.Error()) }
 	}
 
 	return t
@@ -39,7 +39,7 @@ func (t *trama) RegisterPage(uri string, h webHandlerConstructor) {
 	t.Lock()
 	defer t.Unlock()
 
-	a := &adapter{webHandler: h, err: t.Error}
+	a := &adapter{webHandler: h, log: t.Log}
 	templ := template.New(uri)
 
 	if len(t.templateDelims) == 2 {
@@ -72,7 +72,7 @@ func (t *trama) RegisterService(uri string, h ajaxHandlerConstructor) {
 	t.Lock()
 	defer t.Unlock()
 
-	a := &adapter{ajaxHandler: h, err: t.Error}
+	a := &adapter{ajaxHandler: h, log: t.Log}
 
 	if err := t.router.appendRoute(uri, a); err != nil {
 		panic("Cannot append route: " + err.Error())
@@ -89,7 +89,7 @@ func (t *trama) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				t.Recover(r)
 				w.WriteHeader(http.StatusInternalServerError)
 			} else {
-				t.Error(fmt.Errorf("%s", r))
+				t.Log(fmt.Errorf("%s", r))
 			}
 		}
 	}()

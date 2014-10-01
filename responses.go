@@ -1,6 +1,7 @@
 package trama
 
 import (
+	"html/template"
 	"net/http"
 	"path"
 )
@@ -34,32 +35,83 @@ func (w *ResponseWriter) Status() int {
 
 type Response interface {
 	Redirect(url string, statusCode int)
-	SetTemplate(name string, data interface{})
+	ExecuteTemplate(name string, data interface{})
 	SetCookie(cookie *http.Cookie)
+	Error(error)
 }
 
-type TramaResponse struct {
-	RedirectURL        string
-	RedirectStatusCode int
-	TemplateName       string
-	TemplateData       interface{}
-	Set                bool
-	Cookies            []*http.Cookie
+type WebResponse struct {
+	responseWriter     http.ResponseWriter
+	request            *http.Request
+	redirectURL        string
+	redirectStatusCode int
+	templateName       string
+	templateData       interface{}
+	typ                responseType
+	errorTemplate      string
+	template           *template.Template
+	err                error
 }
 
-func (t *TramaResponse) Redirect(url string, statusCode int) {
-	t.Set = true
-	t.RedirectURL = url
-	t.RedirectStatusCode = statusCode
+func NewWebResponse(w http.ResponseWriter, r *http.Request, errorTemplate string) WebResponse {
+	return WebResponse{
+		responseWriter: w,
+		request:        r,
+		errorTemplate:  errorTemplate,
+	}
 }
 
-func (t *TramaResponse) SetTemplate(name string, data interface{}) {
-	t.Set = true
+type responseType string
+
+const (
+	TypeTemplate responseType = "template"
+	TypeRedirect responseType = "redirect"
+	TypeError    responseType = "error"
+)
+
+func (r *WebResponse) Redirect(url string, statusCode int) {
+	r.setType(TypeRedirect)
+	r.redirectURL = url
+	r.redirectStatusCode = statusCode
+}
+
+func (r *WebResponse) ExecuteTemplate(name string, data interface{}) {
+	r.setType(TypeTemplate)
 	_, filename := path.Split(name)
-	t.TemplateName = filename
-	t.TemplateData = data
+	r.templateName = filename
+	r.templateData = data
 }
 
-func (t *TramaResponse) SetCookie(cookie *http.Cookie) {
-	t.Cookies = append(t.Cookies, cookie)
+func (r *WebResponse) Error(err error) {
+	r.setType(TypeError)
+	r.err = err
+}
+
+func (r *WebResponse) SetCookie(cookie *http.Cookie) {
+	http.SetCookie(r.responseWriter, cookie)
+}
+
+func (r *WebResponse) setType(t responseType) {
+	if r.typ != TypeError {
+		r.typ = t
+	}
+}
+
+func (r *WebResponse) Written() bool {
+	return r.typ != ""
+}
+
+func (r *WebResponse) Write() {
+	switch r.typ {
+	case TypeTemplate:
+		r.template.ExecuteTemplate(r.responseWriter, r.templateName, r.templateData)
+		// TODO logar erro
+	case TypeError:
+		r.template.ExecuteTemplate(r.responseWriter, r.errorTemplate, r.err)
+		// TODO logar erro
+	case TypeRedirect:
+		http.Redirect(r.responseWriter, r.request, r.redirectURL, r.redirectStatusCode)
+	default:
+		// TODO log
+	}
 }

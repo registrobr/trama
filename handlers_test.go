@@ -165,7 +165,7 @@ func TestServeWeb(t *testing.T) {
 
 		handler := adapter{
 			webHandler: func() WebHandler { return mock },
-			err: func(err error) {
+			log: func(err error) {
 				notBeforeError := err.Error() != brokenBeforeError.Error()
 				notAfterError := err.Error() != brokenAfterError.Error()
 
@@ -310,7 +310,7 @@ func TestServeAJAX(t *testing.T) {
 		}
 		handler := adapter{
 			ajaxHandler: func() AJAXHandler { return mock },
-			err: func(err error) {
+			log: func(err error) {
 				t.Errorf("Item %d, “%s”, unexpected error found: %s", i, item.description, err)
 			},
 			uriVars: map[string]string{"param1": "1", "param2": "2"},
@@ -360,6 +360,7 @@ type mockWebHandler struct {
 	templatePostData    interface{}
 
 	interceptors WebInterceptorChain
+	err          error
 }
 
 func (m *mockWebHandler) closeTemplates() {
@@ -367,29 +368,34 @@ func (m *mockWebHandler) closeTemplates() {
 	m.templatePost.Close()
 }
 
-func (m *mockWebHandler) Get(res Response, req *http.Request) error {
+func (m *mockWebHandler) Get(res Response, req *http.Request) {
+	if m.err != nil {
+		res.Error(errors.New("Template GET not set"))
+		return
+	}
+
 	if m.templateGetRedirectURL != "" {
 		res.Redirect(m.templateGetRedirectURL, http.StatusFound)
 
 	} else if m.templateGet == nil {
-		return errors.New("Template GET not set")
+		res.Error(errors.New("GET template not set"))
 	}
 
-	res.SetTemplate(m.templateGet.Name(), m.templateGetData)
-	return nil
+	res.ExecuteTemplate(m.templateGet.Name(), m.templateGetData)
 }
 
-func (m *mockWebHandler) Post(res Response, req *http.Request) error {
-	if m.templatePost == nil {
-		return errors.New("Template POST not set")
+func (m *mockWebHandler) Post(res Response, req *http.Request) {
+	if m.err != nil {
+		res.Error(errors.New("Template GET not set"))
+		return
 	}
 
-	res.SetCookie(&http.Cookie{
-		Name:  "cookie1",
-		Value: "value1",
-	})
-	res.SetTemplate(m.templatePost.Name(), m.templatePostData)
-	return nil
+	if m.templatePost == nil {
+		res.Error(errors.New("POST template not set"))
+	}
+
+	res.SetCookie(&http.Cookie{Name: "cookie1", Value: "value1"})
+	res.ExecuteTemplate(m.templatePost.Name(), m.templatePostData)
 }
 
 func (m *mockWebHandler) Templates() []string {

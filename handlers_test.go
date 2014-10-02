@@ -371,17 +371,16 @@ func (m *mockWebHandler) closeTemplates() {
 func (m *mockWebHandler) Get(res Response, req *http.Request) {
 	if m.err != nil {
 		res.Error(errors.New("Template GET not set"))
-		return
-	}
 
-	if m.templateGetRedirectURL != "" {
+	} else if m.templateGetRedirectURL != "" {
 		res.Redirect(m.templateGetRedirectURL, http.StatusFound)
 
 	} else if m.templateGet == nil {
 		res.Error(errors.New("GET template not set"))
-	}
 
-	res.ExecuteTemplate(m.templateGet.Name(), m.templateGetData)
+	} else {
+		res.ExecuteTemplate(m.templateGet.Name(), m.templateGetData)
+	}
 }
 
 func (m *mockWebHandler) Post(res Response, req *http.Request) {

@@ -53,10 +53,11 @@ type WebResponse struct {
 	err                error
 }
 
-func NewWebResponse(w http.ResponseWriter, r *http.Request, errorTemplate string) WebResponse {
-	return WebResponse{
+func NewWebResponse(w http.ResponseWriter, r *http.Request, templ *template.Template, errorTemplate string) *WebResponse {
+	return &WebResponse{
 		responseWriter: w,
 		request:        r,
+		template:       templ,
 		errorTemplate:  errorTemplate,
 	}
 }

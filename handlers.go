@@ -68,11 +68,12 @@ func (s *DefaultAJAXHandler) Head(w http.ResponseWriter, r *http.Request) {
 }
 
 type adapter struct {
-	webHandler  webHandlerConstructor
-	ajaxHandler ajaxHandlerConstructor
-	uriVars     map[string]string
-	log         func(error)
-	template    *template.Template
+	webHandler    webHandlerConstructor
+	ajaxHandler   ajaxHandlerConstructor
+	uriVars       map[string]string
+	log           func(error)
+	template      *template.Template
+	errorTemplate string
 }
 
 func (a adapter) serveHTTP(w http.ResponseWriter, r *http.Request) {
@@ -84,11 +85,7 @@ func (a adapter) serveHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
-	response := &WebResponse{
-		responseWriter: w,
-		template:       a.template,
-		request:        r,
-	}
+	response := NewWebResponse(w, r, a.template, a.errorTemplate)
 	handler := a.webHandler()
 	interceptors := handler.Interceptors()
 

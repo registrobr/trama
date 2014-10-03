@@ -234,69 +234,75 @@ func TestServeWeb(t *testing.T) {
 
 func TestServeAJAX(t *testing.T) {
 	data := []struct {
-		description           string
-		interceptors          AJAXInterceptorChain
-		httpMethod            string
-		expectedStatusCode    int
-		handlerShouldBeCalled bool
+		description                    string
+		interceptors                   AJAXInterceptorChain
+		httpMethod                     string
+		expectedStatusCode             int
+		shouldBreakAtInterceptorNumber int
 	}{
 		{
-			description:           "It should handle the GET request properly",
-			httpMethod:            "GET",
-			expectedStatusCode:    http.StatusOK,
-			handlerShouldBeCalled: true,
+			description:                    "It should handle the GET request properly",
+			httpMethod:                     "GET",
+			expectedStatusCode:             http.StatusOK,
+			shouldBreakAtInterceptorNumber: 1 << 10, // Shouldn't break at all
 		},
 		{
-			description:           "It should handle the PUT request properly",
-			httpMethod:            "PUT",
-			expectedStatusCode:    http.StatusOK,
-			handlerShouldBeCalled: true,
+			description:                    "It should handle the PUT request properly",
+			httpMethod:                     "PUT",
+			expectedStatusCode:             http.StatusOK,
+			shouldBreakAtInterceptorNumber: 1 << 10,
 		},
 		{
-			description:           "It should handle the POST request properly",
-			httpMethod:            "POST",
-			expectedStatusCode:    http.StatusOK,
-			handlerShouldBeCalled: true,
+			description:                    "It should handle the POST request properly",
+			httpMethod:                     "POST",
+			expectedStatusCode:             http.StatusOK,
+			shouldBreakAtInterceptorNumber: 1 << 10,
 		},
 		{
-			description:           "It should handle the PATCH request properly",
-			httpMethod:            "PATCH",
-			expectedStatusCode:    http.StatusOK,
-			handlerShouldBeCalled: true,
+			description:                    "It should handle the PATCH request properly",
+			httpMethod:                     "PATCH",
+			expectedStatusCode:             http.StatusOK,
+			shouldBreakAtInterceptorNumber: 1 << 10,
 		},
 		{
-			description:           "It should handle the DELETE request properly",
-			httpMethod:            "DELETE",
-			expectedStatusCode:    http.StatusOK,
-			handlerShouldBeCalled: true,
+			description:                    "It should handle the DELETE request properly",
+			httpMethod:                     "DELETE",
+			expectedStatusCode:             http.StatusOK,
+			shouldBreakAtInterceptorNumber: 1 << 10,
 		},
 		{
-			description:           "It should handle the HEAD request properly",
-			httpMethod:            "HEAD",
-			expectedStatusCode:    http.StatusOK,
-			handlerShouldBeCalled: true,
+			description:                    "It should handle the HEAD request properly",
+			httpMethod:                     "HEAD",
+			expectedStatusCode:             http.StatusOK,
+			shouldBreakAtInterceptorNumber: 1 << 10,
+		},
+		{
+			description:                    "It should respond with a Not Implemented status",
+			httpMethod:                     "UNKNOWN",
+			expectedStatusCode:             http.StatusNotImplemented,
+			shouldBreakAtInterceptorNumber: -1,
 		},
 		{
 			description:        "It should handle the HEAD request with interceptors properly",
 			httpMethod:         "HEAD",
 			expectedStatusCode: http.StatusOK,
 			interceptors: AJAXInterceptorChain{
-				&struct{ NopAJAXInterceptor }{},
-				&struct{ NopAJAXInterceptor }{},
-				&struct{ NopAJAXInterceptor }{},
+				&mockAJAXInterceptor{},
+				&mockAJAXInterceptor{},
+				&mockAJAXInterceptor{},
 			},
-			handlerShouldBeCalled: true,
+			shouldBreakAtInterceptorNumber: 1 << 10,
 		},
 		{
 			description:        "It should break at the interceptor's Before run and not run the handler's method",
 			httpMethod:         "HEAD",
 			expectedStatusCode: http.StatusInternalServerError,
 			interceptors: AJAXInterceptorChain{
-				&struct{ NopAJAXInterceptor }{},
+				&mockAJAXInterceptor{},
 				&brokenBeforeAJAXInterceptor{},
-				&struct{ NopAJAXInterceptor }{},
+				&mockAJAXInterceptor{},
 			},
-			handlerShouldBeCalled: false,
+			shouldBreakAtInterceptorNumber: 1,
 		},
 	}
 
@@ -325,13 +331,36 @@ func TestServeAJAX(t *testing.T) {
 
 		handler.serveHTTP(w, r)
 
-		if item.handlerShouldBeCalled {
+		for k, interceptor := range item.interceptors {
+			interc := interceptor.(MockAJAXInterceptor)
+
+			if k <= item.shouldBreakAtInterceptorNumber {
+				if !interc.BeforeMethodCalled() {
+					t.Errorf("Item %d, “%s”, not calling Before method for interceptor number %d", i, item.description, k)
+				}
+
+				if !interc.AfterMethodCalled() {
+					t.Errorf("Item %d, “%s”, not calling After method for interceptor number %d", i, item.description, k)
+				}
+
+			} else {
+				if interc.BeforeMethodCalled() {
+					t.Errorf("Item %d, “%s”, calling Before method for interceptor number %d", i, item.description, k)
+				}
+
+				if interc.AfterMethodCalled() {
+					t.Errorf("Item %d, “%s”, calling After method for interceptor number %d", i, item.description, k)
+				}
+			}
+		}
+
+		if len(item.interceptors) < item.shouldBreakAtInterceptorNumber {
 			if !handleFuncCalled {
 				t.Errorf("Item %d, “%s”, not calling handler", i, item.description)
-			} else {
-				if mock.methodCalled != item.httpMethod {
-					t.Errorf("Item %d, “%s”, wrong method called. Expecting %s; found %s", i, item.description, item.httpMethod, mock.methodCalled)
-				}
+			}
+		} else {
+			if handleFuncCalled {
+				t.Errorf("Item %d, “%s”, calling handler", i, item.description)
 			}
 		}
 
@@ -500,18 +529,38 @@ func (m *mockAJAXHandler) Interceptors() AJAXInterceptorChain {
 	return m.interceptors
 }
 
+type mockAJAXInterceptor struct {
+	beforeMethodCalled bool
+	afterMethodCalled  bool
+}
+
+func (m *mockAJAXInterceptor) Before(w http.ResponseWriter, r *http.Request) {
+	m.beforeMethodCalled = true
+}
+
+func (m *mockAJAXInterceptor) After(w http.ResponseWriter, r *http.Request) {
+	m.afterMethodCalled = true
+}
+
+func (m *mockAJAXInterceptor) BeforeMethodCalled() bool {
+	return m.beforeMethodCalled
+}
+
+func (m *mockAJAXInterceptor) AfterMethodCalled() bool {
+	return m.afterMethodCalled
+}
+
+type MockAJAXInterceptor interface {
+	AJAXInterceptor
+	BeforeMethodCalled() bool
+	AfterMethodCalled() bool
+}
+
 type brokenBeforeAJAXInterceptor struct {
-	NopAJAXInterceptor
+	mockAJAXInterceptor
 }
 
 func (b *brokenBeforeAJAXInterceptor) Before(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusInternalServerError)
-}
-
-type brokenAfterAJAXInterceptor struct {
-	NopAJAXInterceptor
-}
-
-func (b *brokenAfterAJAXInterceptor) After(w http.ResponseWriter, r *http.Request) {
+	b.beforeMethodCalled = true
 	w.WriteHeader(http.StatusInternalServerError)
 }

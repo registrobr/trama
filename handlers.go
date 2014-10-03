@@ -93,7 +93,7 @@ func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
 		interceptor.Before(response, r)
 
 		if response.Written() {
-			interceptors = interceptors[:k]
+			interceptors = interceptors[:k+1]
 			goto write
 		}
 	}
@@ -125,7 +125,7 @@ func (a adapter) serveAJAX(rw http.ResponseWriter, r *http.Request) {
 		interceptor.Before(w, r)
 
 		if w.status > 0 || w.Written {
-			interceptors = interceptors[:k]
+			interceptors = interceptors[:k+1]
 			goto write
 		}
 	}

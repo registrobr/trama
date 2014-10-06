@@ -85,9 +85,10 @@ func (t *trama) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	defer func() {
 		if r := recover(); r != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+
 			if t.Recover != nil {
 				t.Recover(r)
-				w.WriteHeader(http.StatusInternalServerError)
 			} else {
 				t.Log(fmt.Errorf("%s", r))
 			}

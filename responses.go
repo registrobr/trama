@@ -1,6 +1,7 @@
 package trama
 
 import (
+	"errors"
 	"html/template"
 	"net/http"
 	"path"
@@ -51,6 +52,7 @@ type WebResponse struct {
 	errorTemplate      string
 	template           *template.Template
 	err                error
+	log                func(error)
 }
 
 func NewWebResponse(w http.ResponseWriter, r *http.Request, templ *template.Template, errorTemplate string) *WebResponse {
@@ -105,14 +107,23 @@ func (r *WebResponse) Written() bool {
 func (r *WebResponse) Write() {
 	switch r.typ {
 	case TypeTemplate:
-		r.template.ExecuteTemplate(r.responseWriter, r.templateName, r.templateData)
-		// TODO logar erro
+		err := r.template.ExecuteTemplate(r.responseWriter, r.templateName, r.templateData)
+
+		if err != nil {
+			r.log(err)
+		}
+
 	case TypeError:
-		r.template.ExecuteTemplate(r.responseWriter, r.errorTemplate, r.err)
-		// TODO logar erro
+		err := r.template.ExecuteTemplate(r.responseWriter, r.errorTemplate, r.err)
+
+		if err != nil {
+			r.log(err)
+		}
+
 	case TypeRedirect:
 		http.Redirect(r.responseWriter, r.request, r.redirectURL, r.redirectStatusCode)
+
 	default:
-		// TODO log
+		r.log(errors.New("Unknown WebResponse type"))
 	}
 }

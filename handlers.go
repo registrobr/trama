@@ -86,6 +86,7 @@ func (a adapter) serveHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
 	response := NewWebResponse(w, r, a.template, a.errorTemplate)
+	response.log = a.log
 	handler := a.webHandler()
 	interceptors := handler.Interceptors()
 

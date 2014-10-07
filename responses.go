@@ -84,6 +84,11 @@ func (r *WebResponse) Written() bool {
 }
 
 func (r *WebResponse) Write() {
+	if !r.Written() {
+		r.responseWriter.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
 	if r.redirectStatusCode != 0 {
 		http.Redirect(r.responseWriter, r.request, r.redirectURL, r.redirectStatusCode)
 	} else {

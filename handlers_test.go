@@ -156,8 +156,8 @@ func TestServeWeb(t *testing.T) {
 		}
 
 		defer mock.closeTemplates()
-		templatesNames := mock.Templates()
-		templ, err := template.New("mock").Funcs(mock.TemplatesFunc()).ParseFiles(templatesNames...)
+		templates := mock.Templates()
+		err := templates.parse("", "")
 
 		if err != nil {
 			t.Fatalf("Item %d, “%s”, unexpected error: “%s”", i, item.description, err)
@@ -173,7 +173,7 @@ func TestServeWeb(t *testing.T) {
 					t.Errorf("Item %d, “%s”, unexpected error: “%s”", i, item.description, err)
 				}
 			},
-			template: templ,
+			templates: templates,
 		}
 
 		w := httptest.NewRecorder()
@@ -389,7 +389,6 @@ type mockWebHandler struct {
 	templatePostData    interface{}
 
 	interceptors WebInterceptorChain
-	err          error
 }
 
 func (m *mockWebHandler) closeTemplates() {
@@ -398,14 +397,8 @@ func (m *mockWebHandler) closeTemplates() {
 }
 
 func (m *mockWebHandler) Get(res Response, req *http.Request) {
-	if m.err != nil {
-		res.Error(errors.New("Template GET not set"))
-
-	} else if m.templateGetRedirectURL != "" {
+	if m.templateGetRedirectURL != "" {
 		res.Redirect(m.templateGetRedirectURL, http.StatusFound)
-
-	} else if m.templateGet == nil {
-		res.Error(errors.New("GET template not set"))
 
 	} else {
 		res.ExecuteTemplate(m.templateGet.Name(), m.templateGetData)
@@ -413,20 +406,11 @@ func (m *mockWebHandler) Get(res Response, req *http.Request) {
 }
 
 func (m *mockWebHandler) Post(res Response, req *http.Request) {
-	if m.err != nil {
-		res.Error(errors.New("Template GET not set"))
-		return
-	}
-
-	if m.templatePost == nil {
-		res.Error(errors.New("POST template not set"))
-	}
-
 	res.SetCookie(&http.Cookie{Name: "cookie1", Value: "value1"})
 	res.ExecuteTemplate(m.templatePost.Name(), m.templatePostData)
 }
 
-func (m *mockWebHandler) Templates() []string {
+func (m *mockWebHandler) Templates() TemplateGroupSet {
 	var err error
 
 	m.templateGet, err = ioutil.TempFile("", "mockWebHandler")
@@ -451,19 +435,30 @@ func (m *mockWebHandler) Templates() []string {
 		return nil
 	}
 
-	return []string{m.templateGet.Name(), m.templatePost.Name()}
+	set := NewTemplateGroupSet()
+	set.Insert(TemplateGroup{
+		Name:  "test",
+		Files: []string{m.templateGet.Name(), m.templatePost.Name()},
+		FuncMap: template.FuncMap{
+			"myFunc": func(value string) string { return "!confidential!" },
+		},
+	})
+
+	return set
 }
 
 func (m *mockWebHandler) Interceptors() WebInterceptorChain {
-	return m.interceptors
+	chain := NewWebInterceptorChain(&setGroupInterceptor{groupName: "test"})
+	return append(chain, m.interceptors...)
 }
 
-func (m *mockWebHandler) TemplatesFunc() template.FuncMap {
-	return template.FuncMap{
-		"myFunc": func(value string) string {
-			return "!confidential!"
-		},
-	}
+type setGroupInterceptor struct {
+	NopWebInterceptor
+	groupName string
+}
+
+func (s *setGroupInterceptor) Before(r Response, _ *http.Request) {
+	r.SetTemplateGroup(s.groupName)
 }
 
 type brokenBeforeInterceptor struct {
@@ -476,7 +471,7 @@ var (
 )
 
 func (b *brokenBeforeInterceptor) Before(r Response, _ *http.Request) {
-	r.Error(brokenBeforeError)
+	r.Redirect("/seeother", http.StatusSeeOther)
 }
 
 type brokenAfterInterceptor struct {
@@ -484,7 +479,7 @@ type brokenAfterInterceptor struct {
 }
 
 func (b *brokenAfterInterceptor) After(r Response, _ *http.Request) {
-	r.Error(brokenAfterError)
+	r.Redirect("/seeother", http.StatusSeeOther)
 }
 
 type mockAJAXHandler struct {

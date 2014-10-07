@@ -3,7 +3,6 @@ package trama
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -89,7 +88,12 @@ func TestRegisterPage(t *testing.T) {
 
 	mux := New(func(err error) { t.Error("Unexpected error:", err) })
 	mux.SetTemplateDelims("[[", "]]")
-	mux.GlobalTemplates = []string{globalTemplates[0].Name(), globalTemplates[1].Name()}
+	mux.GlobalTemplates = NewTemplateGroupSet()
+	groupName := "pt"
+	mux.GlobalTemplates.Insert(TemplateGroup{
+		Name:  groupName,
+		Files: []string{globalTemplates[0].Name(), globalTemplates[1].Name()},
+	})
 
 	defer func() {
 		if x := recover(); x != nil {
@@ -125,10 +129,10 @@ func TestRegisterPage(t *testing.T) {
 
 			if item.templateContentHigherPriority != "" {
 				_, filename := path.Split(handler.templateGet.Name())
-				err = h.template.ExecuteTemplate(buffer, filename, nil)
+				err = h.templates[groupName].executeTemplate(buffer, filename, nil)
 			} else {
 				_, filename := path.Split(handler.templatePost.Name())
-				err = h.template.ExecuteTemplate(buffer, filename, nil)
+				err = h.templates[groupName].executeTemplate(buffer, filename, nil)
 			}
 
 			if err != nil {
@@ -298,10 +302,6 @@ func (h *crazyWebHandler) Interceptors() WebInterceptorChain {
 	return NewWebInterceptorChain()
 }
 
-func (h *crazyWebHandler) Templates() []string {
-	return []string{}
-}
-
-func (h *crazyWebHandler) TemplatesFunc() template.FuncMap {
-	return nil
+func (h *crazyWebHandler) Templates() TemplateGroupSet {
+	return NewTemplateGroupSet()
 }

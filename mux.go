@@ -7,15 +7,15 @@ import (
 )
 
 type trama struct {
-	Recover func(interface{})
+	Recover         func(interface{})
+	GlobalTemplates TemplateGroupSet
 
 	sync.RWMutex
-	router          router
-	log             func(error)
-	leftDelim       string
-	rightDelim      string
-	globalTemplates TemplateGroupSet
-	webHandlers     []*adapter
+	router      router
+	log         func(error)
+	leftDelim   string
+	rightDelim  string
+	webHandlers []*adapter
 }
 
 func New(log func(error)) *trama {
@@ -65,7 +65,7 @@ func (t *trama) RegisterService(uri string, h ajaxHandlerConstructor) {
 func (t *trama) ParseTemplates() error {
 	for _, h := range t.webHandlers {
 		set := h.webHandler().Templates()
-		err := set.union(t.globalTemplates)
+		err := set.union(t.GlobalTemplates)
 
 		if err != nil {
 			return err

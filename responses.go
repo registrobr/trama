@@ -1,8 +1,7 @@
 package trama
 
 import (
-	"errors"
-	"html/template"
+	"fmt"
 	"net/http"
 	"path"
 )
@@ -38,92 +37,69 @@ type Response interface {
 	Redirect(url string, statusCode int)
 	ExecuteTemplate(name string, data interface{})
 	SetCookie(cookie *http.Cookie)
-	Error(error)
+	SetTemplateGroup(name string)
 }
 
 type WebResponse struct {
-	responseWriter     http.ResponseWriter
-	request            *http.Request
-	redirectURL        string
-	redirectStatusCode int
-	templateName       string
-	templateData       interface{}
-	typ                responseType
-	errorTemplate      string
-	template           *template.Template
-	err                error
-	log                func(error)
+	responseWriter       http.ResponseWriter
+	request              *http.Request
+	redirectURL          string
+	redirectStatusCode   int
+	templateName         string
+	templateData         interface{}
+	templates            TemplateGroupSet
+	currentTemplateGroup string
+	written              bool
+	err                  error
+	log                  func(error)
 }
 
-func NewWebResponse(w http.ResponseWriter, r *http.Request, templ *template.Template, errorTemplate string) *WebResponse {
-	return &WebResponse{
-		responseWriter: w,
-		request:        r,
-		template:       templ,
-		errorTemplate:  errorTemplate,
-	}
+func NewWebResponse(w http.ResponseWriter, r *http.Request, templ TemplateGroupSet) *WebResponse {
+	return &WebResponse{responseWriter: w, request: r, templates: templ}
 }
 
-type responseType string
-
-const (
-	TypeTemplate responseType = "template"
-	TypeRedirect responseType = "redirect"
-	TypeError    responseType = "error"
-)
+func (r *WebResponse) SetTemplateGroup(name string) {
+	r.currentTemplateGroup = name
+}
 
 func (r *WebResponse) Redirect(url string, statusCode int) {
-	r.setType(TypeRedirect)
+	r.written = true
 	r.redirectURL = url
 	r.redirectStatusCode = statusCode
 }
 
 func (r *WebResponse) ExecuteTemplate(name string, data interface{}) {
-	r.setType(TypeTemplate)
+	r.written = true
 	_, filename := path.Split(name)
 	r.templateName = filename
 	r.templateData = data
-}
-
-func (r *WebResponse) Error(err error) {
-	r.setType(TypeError)
-	r.err = err
 }
 
 func (r *WebResponse) SetCookie(cookie *http.Cookie) {
 	http.SetCookie(r.responseWriter, cookie)
 }
 
-func (r *WebResponse) setType(t responseType) {
-	if r.typ != TypeError {
-		r.typ = t
-	}
-}
-
 func (r *WebResponse) Written() bool {
-	return r.typ != ""
+	return r.written
 }
 
 func (r *WebResponse) Write() {
-	switch r.typ {
-	case TypeTemplate:
-		err := r.template.ExecuteTemplate(r.responseWriter, r.templateName, r.templateData)
-
-		if err != nil {
-			r.log(err)
-		}
-
-	case TypeError:
-		err := r.template.ExecuteTemplate(r.responseWriter, r.errorTemplate, r.err)
-
-		if err != nil {
-			r.log(err)
-		}
-
-	case TypeRedirect:
+	if r.redirectStatusCode != 0 {
 		http.Redirect(r.responseWriter, r.request, r.redirectURL, r.redirectStatusCode)
+	} else {
+		group, found := r.templates[r.currentTemplateGroup]
 
-	default:
-		r.log(errors.New("Unknown WebResponse type"))
+		if !found {
+			r.log(fmt.Errorf("No template group named “%s” was found", r.currentTemplateGroup))
+			r.responseWriter.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		err := group.executeTemplate(r.responseWriter, r.templateName, r.templateData)
+
+		if err != nil {
+			r.log(err)
+			r.responseWriter.WriteHeader(http.StatusInternalServerError)
+		}
 	}
 }

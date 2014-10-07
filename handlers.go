@@ -1,16 +1,12 @@
 package trama
 
-import (
-	"html/template"
-	"net/http"
-)
+import "net/http"
 
 type WebHandler interface {
 	Get(Response, *http.Request)
 	Post(Response, *http.Request)
 	Interceptors() WebInterceptorChain
-	Templates() []string
-	TemplatesFunc() template.FuncMap
+	Templates() TemplateGroupSet
 }
 
 type AJAXHandler interface {
@@ -31,11 +27,7 @@ func (d *DefaultWebHandler) Get(Response, *http.Request) {}
 
 func (d *DefaultWebHandler) Post(Response, *http.Request) {}
 
-func (d *DefaultWebHandler) Templates() []string {
-	return nil
-}
-
-func (d *DefaultWebHandler) TemplatesFunc() template.FuncMap {
+func (d *DefaultWebHandler) Templates() TemplateGroupSet {
 	return nil
 }
 
@@ -68,12 +60,11 @@ func (s *DefaultAJAXHandler) Head(w http.ResponseWriter, r *http.Request) {
 }
 
 type adapter struct {
-	webHandler    webHandlerConstructor
-	ajaxHandler   ajaxHandlerConstructor
-	uriVars       map[string]string
-	log           func(error)
-	template      *template.Template
-	errorTemplate string
+	webHandler  webHandlerConstructor
+	ajaxHandler ajaxHandlerConstructor
+	uriVars     map[string]string
+	templates   TemplateGroupSet
+	log         func(error)
 }
 
 func (a adapter) serveHTTP(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +76,7 @@ func (a adapter) serveHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
-	response := NewWebResponse(w, r, a.template, a.errorTemplate)
+	response := NewWebResponse(w, r, a.templates)
 	response.log = a.log
 	handler := a.webHandler()
 	interceptors := handler.Interceptors()

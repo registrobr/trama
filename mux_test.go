@@ -95,14 +95,9 @@ func TestRegisterPage(t *testing.T) {
 		Files: []string{globalTemplates[0].Name(), globalTemplates[1].Name()},
 	})
 
-	defer func() {
-		if x := recover(); x != nil {
-			t.Error("Recovering from error:", x)
-		}
-	}()
-
 	for i, item := range data {
 		handler := &mockWebHandler{
+			templateGroup:       groupName,
 			templateGetContent:  item.templateContentHigherPriority,
 			templatePostContent: item.templateContentLowerPriority,
 		}
@@ -111,6 +106,11 @@ func TestRegisterPage(t *testing.T) {
 
 		uri := fmt.Sprintf("/uri/%d", i)
 		mux.RegisterPage(uri, func() WebHandler { return handler })
+		err := mux.ParseTemplates()
+
+		if err != nil {
+			t.Errorf("Item %d, “%s”, unexpected error: “%s”", i, item.description, err)
+		}
 
 		h, err := mux.router.match(uri)
 
@@ -121,7 +121,7 @@ func TestRegisterPage(t *testing.T) {
 			t.Errorf("Item %d, “%s”, nil web handler constructor", i, item.description)
 
 		} else if h.webHandler() != handler {
-			t.Errorf("Item %d, “%s”, mismatch handlers. Expecting %s; found %s", i, item.description, handler, h.webHandler())
+			t.Errorf("Item %d, “%s”, mismatch handlers. Expecting %p; found %p", i, item.description, handler, h.webHandler())
 
 		} else {
 			buffer := new(bytes.Buffer)

@@ -171,8 +171,8 @@ func TestFindRoute(t *testing.T) {
 				t.Fatalf("Item %d, “%s”, found a route when it shoudn't", i, item.description)
 			}
 
-			if handler != item.handler {
-				t.Errorf("Item %d, “%s”, wrong handler found!", i, item.description)
+			if !equalTemplateGroupSet(handler.templates, item.handler.templates) {
+				t.Errorf("Item %d, “%s”, wrong handler found! Expecting %+v; found %+v", i, item.description, item.handler.templates, handler.templates)
 			}
 
 			if item.uriVars != nil {
@@ -190,4 +190,18 @@ func TestFindRoute(t *testing.T) {
 			}
 		}
 	}
+}
+
+func equalTemplateGroupSet(a, b TemplateGroupSet) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+
+	return true
 }

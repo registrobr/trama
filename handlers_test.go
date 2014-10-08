@@ -384,6 +384,8 @@ func TestServeAJAX(t *testing.T) {
 }
 
 type mockWebHandler struct {
+	templateGroup string
+
 	templateGet            *os.File
 	templateGetContent     string
 	templateGetData        interface{}
@@ -420,29 +422,25 @@ func (m *mockWebHandler) Templates() TemplateGroupSet {
 
 	m.templateGet, err = ioutil.TempFile("", "mockWebHandler")
 	if err != nil {
-		println(err.Error())
 		return nil
 	}
 
 	m.templatePost, err = ioutil.TempFile("", "mockWebHandler")
 	if err != nil {
-		println(err.Error())
 		return nil
 	}
 
 	if _, err = io.WriteString(m.templateGet, m.templateGetContent); err != nil {
-		println(err.Error())
 		return nil
 	}
 
 	if _, err = io.WriteString(m.templatePost, m.templatePostContent); err != nil {
-		println(err.Error())
 		return nil
 	}
 
 	set := NewTemplateGroupSet()
 	set.Insert(TemplateGroup{
-		Name:  "test",
+		Name:  m.templateGroup,
 		Files: []string{m.templateGet.Name(), m.templatePost.Name()},
 		FuncMap: template.FuncMap{
 			"myFunc": func(value string) string { return "!confidential!" },
@@ -453,7 +451,7 @@ func (m *mockWebHandler) Templates() TemplateGroupSet {
 }
 
 func (m *mockWebHandler) Interceptors() WebInterceptorChain {
-	chain := NewWebInterceptorChain(&setGroupInterceptor{groupName: "test"})
+	chain := NewWebInterceptorChain(&setGroupInterceptor{groupName: m.templateGroup})
 	return append(chain, m.interceptors...)
 }
 

@@ -204,6 +204,9 @@ func TestRegisterService(t *testing.T) {
 }
 
 func TestServeHTTP(t *testing.T) {
+	mock := &mockWebHandler{templateGetRedirectURL: "/redirect"}
+	defer mock.closeTemplates()
+
 	data := []struct {
 		description    string
 		uri            string
@@ -215,11 +218,7 @@ func TestServeHTTP(t *testing.T) {
 			description: "it should call a handler correctly",
 			uri:         "/example",
 			routes: map[string]webHandlerConstructor{
-				"/example": func() WebHandler {
-					return &mockWebHandler{
-						templateGetRedirectURL: "/redirect",
-					}
-				},
+				"/example": func() WebHandler { return mock },
 			},
 			recoverDefined: true,
 			expectedStatus: http.StatusFound,

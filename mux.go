@@ -63,6 +63,9 @@ func (t *trama) RegisterService(uri string, h ajaxHandlerConstructor) {
 }
 
 func (t *trama) ParseTemplates() error {
+	t.Lock()
+	defer t.Unlock()
+
 	for _, h := range t.webHandlers {
 		set := h.webHandler().Templates()
 		err := set.union(t.GlobalTemplates)

@@ -41,17 +41,17 @@ type Response interface {
 }
 
 type WebResponse struct {
-	responseWriter       http.ResponseWriter
-	request              *http.Request
-	redirectURL          string
-	redirectStatusCode   int
-	templateName         string
-	templateData         interface{}
-	templates            TemplateGroupSet
-	currentTemplateGroup string
-	written              bool
-	err                  error
-	log                  func(error)
+	RedirectURL          string
+	RedirectStatusCode   int
+	TemplateName         string
+	TemplateData         interface{}
+	CurrentTemplateGroup string
+
+	written        bool
+	templates      TemplateGroupSet
+	log            func(error)
+	responseWriter http.ResponseWriter
+	request        *http.Request
 }
 
 func NewWebResponse(w http.ResponseWriter, r *http.Request, templ TemplateGroupSet) *WebResponse {
@@ -59,20 +59,20 @@ func NewWebResponse(w http.ResponseWriter, r *http.Request, templ TemplateGroupS
 }
 
 func (r *WebResponse) SetTemplateGroup(name string) {
-	r.currentTemplateGroup = name
+	r.CurrentTemplateGroup = name
 }
 
 func (r *WebResponse) Redirect(url string, statusCode int) {
 	r.written = true
-	r.redirectURL = url
-	r.redirectStatusCode = statusCode
+	r.RedirectURL = url
+	r.RedirectStatusCode = statusCode
 }
 
 func (r *WebResponse) ExecuteTemplate(name string, data interface{}) {
 	r.written = true
 	_, filename := path.Split(name)
-	r.templateName = filename
-	r.templateData = data
+	r.TemplateName = filename
+	r.TemplateData = data
 }
 
 func (r *WebResponse) SetCookie(cookie *http.Cookie) {
@@ -89,18 +89,18 @@ func (r *WebResponse) Write() {
 		return
 	}
 
-	if r.redirectStatusCode != 0 {
-		http.Redirect(r.responseWriter, r.request, r.redirectURL, r.redirectStatusCode)
+	if r.RedirectStatusCode != 0 {
+		http.Redirect(r.responseWriter, r.request, r.RedirectURL, r.RedirectStatusCode)
 	} else {
-		group, found := r.templates.elements[r.currentTemplateGroup]
+		group, found := r.templates.elements[r.CurrentTemplateGroup]
 
 		if !found {
-			r.log(fmt.Errorf("No template group named “%s” was found", r.currentTemplateGroup))
+			r.log(fmt.Errorf("No template group named “%s” was found", r.CurrentTemplateGroup))
 			r.responseWriter.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		err := group.executeTemplate(r.responseWriter, r.templateName, r.templateData)
+		err := group.executeTemplate(r.responseWriter, r.TemplateName, r.TemplateData)
 
 		if err != nil {
 			r.log(err)

@@ -92,7 +92,7 @@ func (r *WebResponse) Write() {
 	if r.redirectStatusCode != 0 {
 		http.Redirect(r.responseWriter, r.request, r.redirectURL, r.redirectStatusCode)
 	} else {
-		group, found := r.templates[r.currentTemplateGroup]
+		group, found := r.templates.elements[r.currentTemplateGroup]
 
 		if !found {
 			r.log(fmt.Errorf("No template group named “%s” was found", r.currentTemplateGroup))

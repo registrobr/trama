@@ -88,7 +88,7 @@ func TestRegisterPage(t *testing.T) {
 
 	mux := New(func(err error) { t.Error("Unexpected error:", err) })
 	mux.SetTemplateDelims("[[", "]]")
-	mux.GlobalTemplates = NewTemplateGroupSet()
+	mux.GlobalTemplates = NewTemplateGroupSet(nil)
 	groupName := "pt"
 	mux.GlobalTemplates.Insert(TemplateGroup{
 		Name:  groupName,
@@ -129,10 +129,10 @@ func TestRegisterPage(t *testing.T) {
 
 			if item.templateContentHigherPriority != "" {
 				_, filename := path.Split(handler.templateGet.Name())
-				err = h.templates[groupName].executeTemplate(buffer, filename, nil)
+				err = h.templates.elements[groupName].executeTemplate(buffer, filename, nil)
 			} else {
 				_, filename := path.Split(handler.templatePost.Name())
-				err = h.templates[groupName].executeTemplate(buffer, filename, nil)
+				err = h.templates.elements[groupName].executeTemplate(buffer, filename, nil)
 			}
 
 			if err != nil {
@@ -302,5 +302,5 @@ func (h *crazyWebHandler) Interceptors() WebInterceptorChain {
 }
 
 func (h *crazyWebHandler) Templates() TemplateGroupSet {
-	return NewTemplateGroupSet()
+	return NewTemplateGroupSet(nil)
 }

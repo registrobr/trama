@@ -422,29 +422,28 @@ func (m *mockWebHandler) Templates() TemplateGroupSet {
 
 	m.templateGet, err = ioutil.TempFile("", "mockWebHandler")
 	if err != nil {
-		return nil
+		return NewTemplateGroupSet(nil)
 	}
 
 	m.templatePost, err = ioutil.TempFile("", "mockWebHandler")
 	if err != nil {
-		return nil
+		return NewTemplateGroupSet(nil)
 	}
 
 	if _, err = io.WriteString(m.templateGet, m.templateGetContent); err != nil {
-		return nil
+		return NewTemplateGroupSet(nil)
 	}
 
 	if _, err = io.WriteString(m.templatePost, m.templatePostContent); err != nil {
-		return nil
+		return NewTemplateGroupSet(nil)
 	}
 
-	set := NewTemplateGroupSet()
+	set := NewTemplateGroupSet(template.FuncMap{
+		"myFunc": func(value string) string { return "!confidential!" },
+	})
 	set.Insert(TemplateGroup{
 		Name:  m.templateGroup,
 		Files: []string{m.templateGet.Name(), m.templatePost.Name()},
-		FuncMap: template.FuncMap{
-			"myFunc": func(value string) string { return "!confidential!" },
-		},
 	})
 
 	return set

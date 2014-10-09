@@ -193,12 +193,12 @@ func TestFindRoute(t *testing.T) {
 }
 
 func equalTemplateGroupSet(a, b TemplateGroupSet) bool {
-	if len(a) != len(b) {
+	if len(a.elements) != len(b.elements) {
 		return false
 	}
 
-	for k, v := range a {
-		if b[k] != v {
+	for k, v := range a.elements {
+		if b.elements[k] != v {
 			return false
 		}
 	}

@@ -6,31 +6,43 @@ import (
 	"io"
 )
 
-type TemplateGroupSet map[string]*TemplateGroup
+type TemplateGroupSet struct {
+	elements map[string]*TemplateGroup
+	funcMap  template.FuncMap
+}
 
-func NewTemplateGroupSet() TemplateGroupSet {
-	return make(TemplateGroupSet)
+func NewTemplateGroupSet(f template.FuncMap) TemplateGroupSet {
+	return TemplateGroupSet{elements: make(map[string]*TemplateGroup), funcMap: f}
 }
 
 func (t TemplateGroupSet) Insert(g TemplateGroup) error {
-	if _, found := t[g.Name]; found {
+	if _, found := t.elements[g.Name]; found {
 		return fmt.Errorf("Another template group with the name “%s” is already registered", g.Name)
 	}
 
-	t[g.Name] = &g
+	g.funcMap = t.funcMap
+	t.elements[g.Name] = &g
 	return nil
 }
 
 func (t TemplateGroupSet) union(other TemplateGroupSet) error {
-	for name, otherGroup := range other {
-		if group, found := t[name]; found {
+	for k, v := range other.funcMap {
+		if _, found := t.funcMap[k]; found {
+			return fmt.Errorf("Function “%s” already registered", k)
+		}
+
+		t.funcMap[k] = v
+	}
+
+	for name, otherGroup := range other.elements {
+		if group, found := t.elements[name]; found {
 			err := group.merge(otherGroup)
 
 			if err != nil {
 				return err
 			}
 		} else {
-			t[name] = otherGroup
+			t.elements[name] = otherGroup
 		}
 	}
 
@@ -38,7 +50,7 @@ func (t TemplateGroupSet) union(other TemplateGroupSet) error {
 }
 
 func (t TemplateGroupSet) parse(leftDelim, rightDelim string) error {
-	for _, group := range t {
+	for _, group := range t.elements {
 		err := group.parse(leftDelim, rightDelim)
 
 		if err != nil {
@@ -50,23 +62,15 @@ func (t TemplateGroupSet) parse(leftDelim, rightDelim string) error {
 }
 
 type TemplateGroup struct {
-	Name    string
-	Files   []string
-	FuncMap template.FuncMap
+	Name  string
+	Files []string
 
-	templ *template.Template
+	funcMap template.FuncMap
+	templ   *template.Template
 }
 
 func (t *TemplateGroup) merge(other *TemplateGroup) error {
 	t.Files = append(t.Files, other.Files...)
-
-	for k, v := range other.FuncMap {
-		if _, found := t.FuncMap[k]; found {
-			return fmt.Errorf("Function “%s” already registered in group “%s”", k, t.Name)
-		}
-
-		t.FuncMap[k] = v
-	}
 
 	return nil
 }
@@ -78,8 +82,8 @@ func (t *TemplateGroup) parse(leftDelim, rightDelim string) (err error) {
 		t.templ = t.templ.Delims(leftDelim, rightDelim)
 	}
 
-	if t.FuncMap != nil {
-		t.templ = t.templ.Funcs(t.FuncMap)
+	if t.funcMap != nil {
+		t.templ = t.templ.Funcs(t.funcMap)
 	}
 
 	t.templ, err = t.templ.ParseFiles(t.Files...)

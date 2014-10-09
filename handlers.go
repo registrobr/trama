@@ -28,7 +28,7 @@ func (d *DefaultWebHandler) Get(Response, *http.Request) {}
 func (d *DefaultWebHandler) Post(Response, *http.Request) {}
 
 func (d *DefaultWebHandler) Templates() TemplateGroupSet {
-	return nil
+	return NewTemplateGroupSet(nil)
 }
 
 type DefaultAJAXHandler struct {

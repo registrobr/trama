@@ -41,11 +41,7 @@ func (t TemplateGroupSet) union(other TemplateGroupSet) error {
 
 	for name, otherGroup := range other.elements {
 		if group, found := t.elements[name]; found {
-			err := group.merge(otherGroup)
-
-			if err != nil {
-				return err
-			}
+			group.merge(otherGroup)
 		} else {
 			t.elements[name] = otherGroup
 		}
@@ -74,10 +70,8 @@ type TemplateGroup struct {
 	templ   *template.Template
 }
 
-func (t *TemplateGroup) merge(other *TemplateGroup) error {
+func (t *TemplateGroup) merge(other *TemplateGroup) {
 	t.Files = append(t.Files, other.Files...)
-
-	return nil
 }
 
 func (t *TemplateGroup) parse(leftDelim, rightDelim string) (err error) {

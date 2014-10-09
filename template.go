@@ -7,12 +7,12 @@ import (
 )
 
 type TemplateGroupSet struct {
+	FuncMap  template.FuncMap
 	elements map[string]*TemplateGroup
-	funcMap  template.FuncMap
 }
 
 func NewTemplateGroupSet(f template.FuncMap) TemplateGroupSet {
-	return TemplateGroupSet{elements: make(map[string]*TemplateGroup), funcMap: f}
+	return TemplateGroupSet{elements: make(map[string]*TemplateGroup), FuncMap: f}
 }
 
 func (t TemplateGroupSet) Insert(g TemplateGroup) error {
@@ -20,18 +20,23 @@ func (t TemplateGroupSet) Insert(g TemplateGroup) error {
 		return fmt.Errorf("Another template group with the name “%s” is already registered", g.Name)
 	}
 
-	g.funcMap = t.funcMap
+	g.funcMap = t.FuncMap
 	t.elements[g.Name] = &g
 	return nil
 }
 
+func (t TemplateGroupSet) find(groupName string) (group *TemplateGroup, found bool) {
+	group, found = t.elements[groupName]
+	return
+}
+
 func (t TemplateGroupSet) union(other TemplateGroupSet) error {
-	for k, v := range other.funcMap {
-		if _, found := t.funcMap[k]; found {
+	for k, v := range other.FuncMap {
+		if _, found := t.FuncMap[k]; found {
 			return fmt.Errorf("Function “%s” already registered", k)
 		}
 
-		t.funcMap[k] = v
+		t.FuncMap[k] = v
 	}
 
 	for name, otherGroup := range other.elements {

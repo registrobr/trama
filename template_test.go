@@ -65,23 +65,13 @@ func TestInsertInGroupSet(t *testing.T) {
 func TestSetUnion(t *testing.T) {
 	data := []struct {
 		description string
-		set         TemplateGroupSet
+		setA        TemplateGroupSet
+		setB        TemplateGroupSet
 		shouldFail  bool
 	}{
 		{
-			description: "The union should succeed",
-			set: TemplateGroupSet{
-				elements: map[string]*TemplateGroup{
-					"um nome": &TemplateGroup{
-						Name:  "um nome",
-						Files: []string{"um arquivo", "outro arquivo"},
-					},
-				},
-			},
-		},
-		{
 			description: "The union should succeed, with a merge of the files",
-			set: TemplateGroupSet{
+			setA: TemplateGroupSet{
 				elements: map[string]*TemplateGroup{
 					"nome repetido": &TemplateGroup{
 						Name:  "nome repetido",
@@ -89,10 +79,21 @@ func TestSetUnion(t *testing.T) {
 					},
 				},
 			},
+			setB: TemplateGroupSet{
+				elements: map[string]*TemplateGroup{
+					"um grupo": &TemplateGroup{
+						Name: "um grupo",
+					},
+					"nome repetido": &TemplateGroup{
+						Name:  "nome repetido",
+						Files: []string{"este arquivo", "aquele arquivo"},
+					},
+				},
+			},
 		},
 		{
 			description: "The union should succeed, with a merge of the functions",
-			set: TemplateGroupSet{
+			setA: TemplateGroupSet{
 				elements: map[string]*TemplateGroup{
 					"outro nome": &TemplateGroup{
 						Name:  "outro nome",
@@ -103,10 +104,24 @@ func TestSetUnion(t *testing.T) {
 					"função": func() bool { return false },
 				},
 			},
+			setB: TemplateGroupSet{
+				elements: map[string]*TemplateGroup{
+					"um grupo": &TemplateGroup{
+						Name: "um grupo",
+					},
+					"nome repetido": &TemplateGroup{
+						Name:  "nome repetido",
+						Files: []string{"este arquivo", "aquele arquivo"},
+					},
+				},
+				FuncMap: template.FuncMap{
+					"nome repetido": func() int { return 17 },
+				},
+			},
 		},
 		{
 			description: "The union should fail due to a function with the same name of another",
-			set: TemplateGroupSet{
+			setA: TemplateGroupSet{
 				elements: map[string]*TemplateGroup{
 					"muitos nomes": &TemplateGroup{
 						Name:  "muitos nomes",
@@ -117,28 +132,77 @@ func TestSetUnion(t *testing.T) {
 					"nome repetido": func() bool { return false },
 				},
 			},
+			setB: TemplateGroupSet{
+				elements: map[string]*TemplateGroup{
+					"um grupo": &TemplateGroup{
+						Name: "um grupo",
+					},
+					"nome repetido": &TemplateGroup{
+						Name:  "nome repetido",
+						Files: []string{"este arquivo", "aquele arquivo"},
+					},
+				},
+				FuncMap: template.FuncMap{
+					"nome repetido": func() int { return 17 },
+				},
+			},
 			shouldFail: true,
 		},
-	}
-
-	set := TemplateGroupSet{
-		elements: map[string]*TemplateGroup{
-			"um grupo": &TemplateGroup{
-				Name: "um grupo",
+		{
+			description: "The union should succeed if the first set doesn't have functions",
+			setA: TemplateGroupSet{
+				elements: map[string]*TemplateGroup{
+					"muitos nomes": &TemplateGroup{
+						Name:  "muitos nomes",
+						Files: []string{"mais um arquivo"},
+					},
+				},
 			},
-			"nome repetido": &TemplateGroup{
-				Name:  "nome repetido",
-				Files: []string{"este arquivo", "aquele arquivo"},
+			setB: TemplateGroupSet{
+				elements: map[string]*TemplateGroup{
+					"um grupo": &TemplateGroup{
+						Name: "um grupo",
+					},
+					"nome repetido": &TemplateGroup{
+						Name:  "nome repetido",
+						Files: []string{"este arquivo", "aquele arquivo"},
+					},
+				},
+				FuncMap: template.FuncMap{
+					"nome repetido": func() int { return 17 },
+				},
 			},
 		},
-		FuncMap: template.FuncMap{
-			"nome repetido": func() int { return 17 },
+		{
+			description: "The union should succeed if the second set doesn't have functions",
+			setA: TemplateGroupSet{
+				elements: map[string]*TemplateGroup{
+					"muitos nomes": &TemplateGroup{
+						Name:  "muitos nomes",
+						Files: []string{"mais um arquivo"},
+					},
+				},
+				FuncMap: template.FuncMap{
+					"nome repetido": func() bool { return false },
+				},
+			},
+			setB: TemplateGroupSet{
+				elements: map[string]*TemplateGroup{
+					"um grupo": &TemplateGroup{
+						Name: "um grupo",
+					},
+					"nome repetido": &TemplateGroup{
+						Name:  "nome repetido",
+						Files: []string{"este arquivo", "aquele arquivo"},
+					},
+				},
+			},
 		},
 	}
 
 	for i, item := range data {
-		newSet := copySet(set)
-		err := newSet.union(item.set)
+		copied := copySet(item.setA)
+		err := item.setA.union(item.setB)
 
 		if item.shouldFail {
 			if err == nil {
@@ -148,12 +212,12 @@ func TestSetUnion(t *testing.T) {
 			if err != nil {
 				t.Errorf("Item %d, “%s”: unexpected error: “%s”", i, item.description, err)
 			} else {
-				if !subSet(set, newSet) {
-					t.Errorf("Item %d, “%s”: the original set is not a subset of the new set. Original: %+v; new: %+v", i, item.description, set, newSet)
+				if !subSet(copied, item.setA) {
+					t.Errorf("Item %d, “%s”: the original set is not a subset of the new set. Original: %+v; new: %+v", i, item.description, copied, item.setA)
 				}
 
-				if !subSet(item.set, newSet) {
-					t.Errorf("Item %d, “%s”: the item's set is not a subset of the new set. Item's set: %+v; new: %+v", i, item.description, set, newSet)
+				if !subSet(item.setB, item.setA) {
+					t.Errorf("Item %d, “%s”: the item's set is not a subset of the new set. Item's set: %+v; new: %+v", i, item.description, item.setB, item.setA)
 				}
 			}
 		}

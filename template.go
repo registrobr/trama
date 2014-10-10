@@ -15,7 +15,7 @@ func NewTemplateGroupSet(f template.FuncMap) TemplateGroupSet {
 	return TemplateGroupSet{elements: make(map[string]*TemplateGroup), FuncMap: f}
 }
 
-func (t TemplateGroupSet) Insert(g TemplateGroup) error {
+func (t *TemplateGroupSet) Insert(g TemplateGroup) error {
 	if _, found := t.elements[g.Name]; found {
 		return fmt.Errorf("Another template group with the name “%s” is already registered", g.Name)
 	}
@@ -25,12 +25,16 @@ func (t TemplateGroupSet) Insert(g TemplateGroup) error {
 	return nil
 }
 
-func (t TemplateGroupSet) find(groupName string) (group *TemplateGroup, found bool) {
+func (t *TemplateGroupSet) find(groupName string) (group *TemplateGroup, found bool) {
 	group, found = t.elements[groupName]
 	return
 }
 
-func (t TemplateGroupSet) union(other TemplateGroupSet) error {
+func (t *TemplateGroupSet) union(other TemplateGroupSet) error {
+	if len(other.FuncMap) > 0 && t.FuncMap == nil {
+		t.FuncMap = make(template.FuncMap)
+	}
+
 	for k, v := range other.FuncMap {
 		if _, found := t.FuncMap[k]; found {
 			return fmt.Errorf("Function “%s” already registered", k)
@@ -50,7 +54,7 @@ func (t TemplateGroupSet) union(other TemplateGroupSet) error {
 	return nil
 }
 
-func (t TemplateGroupSet) parse(leftDelim, rightDelim string) error {
+func (t *TemplateGroupSet) parse(leftDelim, rightDelim string) error {
 	for _, group := range t.elements {
 		err := group.parse(leftDelim, rightDelim)
 

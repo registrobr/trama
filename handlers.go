@@ -76,15 +76,19 @@ func (a adapter) serveHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
-	response := NewWebResponse(w, r, a.templates)
-	response.log = a.log
+	response := &webResponse{
+		responseWriter: w,
+		request:        r,
+		templates:      a.templates,
+		log:            a.log,
+	}
 	handler := a.webHandler()
 	interceptors := handler.Interceptors()
 
 	for k, interceptor := range interceptors {
 		interceptor.Before(response, r)
 
-		if response.Written() {
+		if response.written {
 			interceptors = interceptors[:k+1]
 			goto write
 		}
@@ -104,11 +108,11 @@ write:
 		interceptors[k].After(response, r)
 	}
 
-	response.Write()
+	response.write()
 }
 
 func (a adapter) serveAJAX(rw http.ResponseWriter, r *http.Request) {
-	w := &ResponseWriter{ResponseWriter: rw}
+	w := &responseWriter{ResponseWriter: rw}
 	handler := a.ajaxHandler()
 	newParamDecoder(handler, a.uriVars, a.log).decode()
 	interceptors := handler.Interceptors()
@@ -116,7 +120,7 @@ func (a adapter) serveAJAX(rw http.ResponseWriter, r *http.Request) {
 	for k, interceptor := range interceptors {
 		interceptor.Before(w, r)
 
-		if w.status > 0 || w.Written {
+		if w.status > 0 || w.written {
 			interceptors = interceptors[:k+1]
 			goto write
 		}
@@ -144,7 +148,7 @@ write:
 		interceptors[k].After(w, r)
 	}
 
-	if !w.Written {
+	if !w.written {
 		w.Write(nil)
 	}
 }

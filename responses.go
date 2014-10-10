@@ -6,14 +6,14 @@ import (
 	"path"
 )
 
-type ResponseWriter struct {
+type responseWriter struct {
 	http.ResponseWriter
 	status  int
-	Written bool
+	written bool
 }
 
-func (w *ResponseWriter) Write(b []byte) (int, error) {
-	if !w.Written {
+func (w *responseWriter) Write(b []byte) (int, error) {
+	if !w.written {
 		// note: the first call to Write will trigger an
 		// implicit WriteHeader(http.StatusOK).
 		if w.status > 0 {
@@ -21,86 +21,77 @@ func (w *ResponseWriter) Write(b []byte) (int, error) {
 		}
 	}
 
-	w.Written = true
+	w.written = true
 	return w.ResponseWriter.Write(b)
 }
 
-func (w *ResponseWriter) WriteHeader(s int) {
+func (w *responseWriter) WriteHeader(s int) {
 	w.status = s
 }
 
-func (w *ResponseWriter) Status() int {
+func (w *responseWriter) Status() int {
 	return w.status
 }
 
 type Response interface {
+	SetTemplateGroup(name string)
+	SetCookie(cookie *http.Cookie)
 	Redirect(url string, statusCode int)
 	ExecuteTemplate(name string, data interface{})
-	SetCookie(cookie *http.Cookie)
-	SetTemplateGroup(name string)
 }
 
-type WebResponse struct {
-	RedirectURL          string
-	RedirectStatusCode   int
-	TemplateName         string
-	TemplateData         interface{}
-	CurrentTemplateGroup string
-
-	written        bool
-	templates      TemplateGroupSet
-	log            func(error)
-	responseWriter http.ResponseWriter
-	request        *http.Request
+type webResponse struct {
+	redirectURL          string
+	redirectStatusCode   int
+	templateName         string
+	templateData         interface{}
+	currentTemplateGroup string
+	templates            TemplateGroupSet
+	written              bool
+	responseWriter       http.ResponseWriter
+	request              *http.Request
+	log                  func(error)
 }
 
-func NewWebResponse(w http.ResponseWriter, r *http.Request, templ TemplateGroupSet) *WebResponse {
-	return &WebResponse{responseWriter: w, request: r, templates: templ}
+func (r *webResponse) SetTemplateGroup(name string) {
+	r.currentTemplateGroup = name
 }
 
-func (r *WebResponse) SetTemplateGroup(name string) {
-	r.CurrentTemplateGroup = name
-}
-
-func (r *WebResponse) Redirect(url string, statusCode int) {
+func (r *webResponse) Redirect(url string, statusCode int) {
 	r.written = true
-	r.RedirectURL = url
-	r.RedirectStatusCode = statusCode
+	r.redirectURL = url
+	r.redirectStatusCode = statusCode
 }
 
-func (r *WebResponse) ExecuteTemplate(name string, data interface{}) {
+func (r *webResponse) ExecuteTemplate(name string, data interface{}) {
 	r.written = true
 	_, filename := path.Split(name)
-	r.TemplateName = filename
-	r.TemplateData = data
+	r.templateName = filename
+	r.templateData = data
 }
 
-func (r *WebResponse) SetCookie(cookie *http.Cookie) {
+func (r *webResponse) SetCookie(cookie *http.Cookie) {
 	http.SetCookie(r.responseWriter, cookie)
 }
 
-func (r *WebResponse) Written() bool {
-	return r.written
-}
-
-func (r *WebResponse) Write() {
-	if !r.Written() {
+func (r *webResponse) write() {
+	if !r.written {
 		r.responseWriter.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	if r.RedirectStatusCode != 0 {
-		http.Redirect(r.responseWriter, r.request, r.RedirectURL, r.RedirectStatusCode)
+	if r.redirectStatusCode != 0 {
+		http.Redirect(r.responseWriter, r.request, r.redirectURL, r.redirectStatusCode)
 	} else {
-		group, found := r.templates.elements[r.CurrentTemplateGroup]
+		group, found := r.templates.elements[r.currentTemplateGroup]
 
 		if !found {
-			r.log(fmt.Errorf("No template group named “%s” was found", r.CurrentTemplateGroup))
+			r.log(fmt.Errorf("No template group named “%s” was found", r.currentTemplateGroup))
 			r.responseWriter.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		err := group.executeTemplate(r.responseWriter, r.TemplateName, r.TemplateData)
+		err := group.executeTemplate(r.responseWriter, r.templateName, r.templateData)
 
 		if err != nil {
 			r.log(err)

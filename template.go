@@ -20,7 +20,6 @@ func (t *TemplateGroupSet) Insert(g TemplateGroup) error {
 		return fmt.Errorf("Another template group with the name “%s” is already registered", g.Name)
 	}
 
-	g.funcMap = t.FuncMap
 	t.elements[g.Name] = &g
 	return nil
 }
@@ -56,7 +55,7 @@ func (t *TemplateGroupSet) union(other TemplateGroupSet) error {
 
 func (t *TemplateGroupSet) parse(leftDelim, rightDelim string) error {
 	for _, group := range t.elements {
-		err := group.parse(leftDelim, rightDelim)
+		err := group.parse(leftDelim, rightDelim, t.FuncMap)
 
 		if err != nil {
 			return err
@@ -70,23 +69,22 @@ type TemplateGroup struct {
 	Name  string
 	Files []string
 
-	funcMap template.FuncMap
-	templ   *template.Template
+	templ *template.Template
 }
 
 func (t *TemplateGroup) merge(other *TemplateGroup) {
 	t.Files = append(t.Files, other.Files...)
 }
 
-func (t *TemplateGroup) parse(leftDelim, rightDelim string) (err error) {
+func (t *TemplateGroup) parse(leftDelim, rightDelim string, funcMap template.FuncMap) (err error) {
 	t.templ = template.New(t.Name)
 
 	if leftDelim != "" || rightDelim != "" {
 		t.templ = t.templ.Delims(leftDelim, rightDelim)
 	}
 
-	if t.funcMap != nil {
-		t.templ = t.templ.Funcs(t.funcMap)
+	if funcMap != nil {
+		t.templ = t.templ.Funcs(funcMap)
 	}
 
 	t.templ, err = t.templ.ParseFiles(t.Files...)

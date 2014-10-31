@@ -1,9 +1,6 @@
 package trama
 
-import (
-	"html/template"
-	"testing"
-)
+import "testing"
 
 func TestAppendRoute(t *testing.T) {
 	var data = []struct {
@@ -107,21 +104,21 @@ func TestFindRoute(t *testing.T) {
 		route        string
 		matchURI     string
 		uriVars      map[string]string
-		handler      adapter
+		handler      *adapter
 		shouldntFind bool
 	}{
 		{
 			description: "It should find a simple route",
 			route:       "/test/web",
 			matchURI:    "/test/web",
-			handler:     adapter{template: template.New("test")},
+			handler:     &adapter{},
 		},
 		{
 			description: "It should find a route with a wildcard",
 			route:       "/find/{param}",
 			matchURI:    "/find/web",
 			uriVars:     map[string]string{"param": "web"},
-			handler:     adapter{template: template.New("test")},
+			handler:     &adapter{},
 		},
 		{
 			description: "It should find a route with multiple wildcards",
@@ -131,7 +128,7 @@ func TestFindRoute(t *testing.T) {
 				"x": "xx",
 				"y": "yy",
 			},
-			handler: adapter{template: template.New("test")},
+			handler: &adapter{},
 		},
 		{
 			description: "It should find a route with multiple wildcards",
@@ -141,13 +138,13 @@ func TestFindRoute(t *testing.T) {
 				"das":  "estas",
 				"fogo": "outono",
 			},
-			handler: adapter{template: template.New("test")},
+			handler: &adapter{},
 		},
 		{
 			description:  "It shouldn't find a route",
 			route:        "gestuais/do/corpo/do/fogo",
 			matchURI:     "gestuais/das/mãos",
-			handler:      adapter{template: template.New("test")},
+			handler:      &adapter{},
 			shouldntFind: true,
 		},
 	}
@@ -155,7 +152,7 @@ func TestFindRoute(t *testing.T) {
 	rt := newRouter()
 
 	for i, item := range data {
-		err := rt.appendRoute(item.route, &item.handler)
+		err := rt.appendRoute(item.route, item.handler)
 
 		if err != nil {
 			t.Errorf("Item %d, “%s”, couldn't append a route: %s", i, item.description, err)
@@ -174,8 +171,8 @@ func TestFindRoute(t *testing.T) {
 				t.Fatalf("Item %d, “%s”, found a route when it shoudn't", i, item.description)
 			}
 
-			if handler.template != item.handler.template {
-				t.Errorf("Item %d, “%s”, wrong handler found!", i, item.description)
+			if !equalTemplateGroupSet(handler.templates, item.handler.templates) {
+				t.Errorf("Item %d, “%s”, wrong handler found! Expecting %+v; found %+v", i, item.description, item.handler.templates, handler.templates)
 			}
 
 			if item.uriVars != nil {
@@ -193,4 +190,18 @@ func TestFindRoute(t *testing.T) {
 			}
 		}
 	}
+}
+
+func equalTemplateGroupSet(a, b TemplateGroupSet) bool {
+	if len(a.elements) != len(b.elements) {
+		return false
+	}
+
+	for k, v := range a.elements {
+		if b.elements[k] != v {
+			return false
+		}
+	}
+
+	return true
 }

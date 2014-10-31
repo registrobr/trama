@@ -23,9 +23,10 @@ func TestServeWeb(t *testing.T) {
 		contentPost        string
 		dataPost           interface{}
 		expectedResultPost string
+		expectedCookies    string
 
-		interceptors   WebInterceptorChain
-		testStatusCode bool
+		interceptors       WebInterceptorChain
+		expectedStatusCode int
 	}{
 		{
 			description: "It should write the expected results",
@@ -67,7 +68,8 @@ func TestServeWeb(t *testing.T) {
 				(a manhã) que plana livre de armação.
 				A manhã, toldo de um tecido tão aéreo
 				que, tecido, se eleva por si: luz balão.`,
-			testStatusCode: true,
+			expectedCookies:    "cookie1=value1",
+			expectedStatusCode: http.StatusOK,
 		},
 		{
 			description: "It should write the expected results after running the interceptors",
@@ -109,7 +111,8 @@ func TestServeWeb(t *testing.T) {
 				(a manhã) que plana livre de armação.
 				A manhã, toldo de um tecido tão aéreo
 				que, tecido, se eleva por si: luz balão.`,
-			testStatusCode: true,
+			expectedCookies:    "cookie1=value1",
+			expectedStatusCode: http.StatusOK,
 			interceptors: WebInterceptorChain{
 				&struct{ NopWebInterceptor }{},
 				&struct{ NopWebInterceptor }{},
@@ -119,7 +122,7 @@ func TestServeWeb(t *testing.T) {
 		{
 			description:       "It should break at the interceptor's Before run",
 			contentGet:        "Tecendo a manhã",
-			expectedResultGet: "",
+			expectedResultGet: "<a href=\"/seeother\">See Other</a>.\n\n",
 			interceptors: WebInterceptorChain{
 				&struct{ NopWebInterceptor }{},
 				&brokenBeforeInterceptor{},
@@ -129,19 +132,19 @@ func TestServeWeb(t *testing.T) {
 		{
 			description:       "It should break at the interceptor's After run",
 			contentGet:        "Tecendo a manhã",
-			expectedResultGet: "",
+			expectedResultGet: "<a href=\"/seeother\">See Other</a>.\n\n",
 			interceptors: WebInterceptorChain{
 				&struct{ NopWebInterceptor }{},
 				&brokenAfterInterceptor{},
 				&struct{ NopWebInterceptor }{},
 			},
-			testStatusCode: true,
+			expectedCookies:    "cookie1=value1",
+			expectedStatusCode: http.StatusSeeOther,
 		},
 		{
 			description:       "It should redirect when necessary",
 			redirectURL:       "/test",
 			expectedResultGet: "<a href=\"/test\">Found</a>.\n\n",
-			testStatusCode:    false,
 		},
 	}
 
@@ -156,8 +159,8 @@ func TestServeWeb(t *testing.T) {
 		}
 
 		defer mock.closeTemplates()
-		templatesNames := mock.Templates()
-		templ, err := template.New("mock").Funcs(mock.TemplatesFunc()).ParseFiles(templatesNames...)
+		templates := mock.Templates()
+		err := templates.parse("", "")
 
 		if err != nil {
 			t.Fatalf("Item %d, “%s”, unexpected error: “%s”", i, item.description, err)
@@ -173,7 +176,7 @@ func TestServeWeb(t *testing.T) {
 					t.Errorf("Item %d, “%s”, unexpected error: “%s”", i, item.description, err)
 				}
 			},
-			template: templ,
+			templates: templates,
 		}
 
 		w := httptest.NewRecorder()
@@ -185,8 +188,8 @@ func TestServeWeb(t *testing.T) {
 
 		handler.serveHTTP(w, r)
 
-		if item.testStatusCode && w.Code != http.StatusOK {
-			t.Errorf("Item %d, “%s”, wrong status code. Expecting 200; found %d", i, item.description, w.Code)
+		if item.expectedStatusCode != 0 && w.Code != item.expectedStatusCode {
+			t.Errorf("Item %d, “%s”, wrong status code. Expecting %d; found %d", i, item.description, item.expectedStatusCode, w.Code)
 
 		} else if item.redirectURL != "" && w.Code != http.StatusFound {
 			t.Errorf("Item %d, “%s”, wrong status code. Expecting 302; found %d", i, item.description, w.Code)
@@ -196,25 +199,27 @@ func TestServeWeb(t *testing.T) {
 			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%s”;\nfound “%s”", i, item.description, item.expectedResultGet, w.Body.String())
 		}
 
-		w = httptest.NewRecorder()
-		r, err = http.NewRequest("POST", "/uri", nil)
+		if item.contentPost != "" || item.dataPost != nil {
+			w = httptest.NewRecorder()
+			r, err = http.NewRequest("POST", "/uri", nil)
 
-		if err != nil {
-			t.Error(err)
-		}
+			if err != nil {
+				t.Error(err)
+			}
 
-		handler.serveHTTP(w, r)
+			handler.serveHTTP(w, r)
 
-		if item.testStatusCode && w.Code != http.StatusOK {
-			t.Errorf("Item %d, “%s”, wrong status code. Expecting 200; found %d", i, item.description, w.Code)
-		}
+			if item.expectedStatusCode != 0 && w.Code != item.expectedStatusCode {
+				t.Errorf("Item %d, “%s”, wrong status code. Expecting %d; found %d", i, item.description, item.expectedStatusCode, w.Code)
+			}
 
-		if w.Body.String() != item.expectedResultPost {
-			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%s”;\nfound “%s”", i, item.description, item.expectedResultPost, w.Body.String())
-		}
+			if w.Body.String() != item.expectedResultPost {
+				t.Errorf("Item %d, “%s”, unexpected result. Expecting “%s”;\nfound “%s”", i, item.description, item.expectedResultPost, w.Body.String())
+			}
 
-		if item.testStatusCode && w.Header().Get("Set-Cookie") != "cookie1=value1" {
-			t.Errorf("Item %d, “%s”, unexpected result. Expecting “cookie1=value1”;\nfound “%s”", i, item.description, w.Header().Get("Set-Cookie"))
+			if w.Header().Get("Set-Cookie") != item.expectedCookies {
+				t.Errorf("Item %d, “%s”, unexpected result. Expecting “%s”;\nfound “%s”", i, item.description, item.expectedCookies, w.Header().Get("Set-Cookie"))
+			}
 		}
 
 		w = httptest.NewRecorder()
@@ -226,7 +231,7 @@ func TestServeWeb(t *testing.T) {
 
 		handler.serveHTTP(w, r)
 
-		if item.testStatusCode && w.Code != http.StatusNotImplemented {
+		if item.expectedStatusCode != 0 && w.Code != http.StatusNotImplemented {
 			t.Errorf("Item %d, “%s”, wrong status code. Expecting %d; found %d", i, item.description, http.StatusNotImplemented, w.Code)
 		}
 	}
@@ -379,6 +384,8 @@ func TestServeAJAX(t *testing.T) {
 }
 
 type mockWebHandler struct {
+	templateGroup string
+
 	templateGet            *os.File
 	templateGetContent     string
 	templateGetData        interface{}
@@ -389,7 +396,6 @@ type mockWebHandler struct {
 	templatePostData    interface{}
 
 	interceptors WebInterceptorChain
-	err          error
 }
 
 func (m *mockWebHandler) closeTemplates() {
@@ -398,14 +404,8 @@ func (m *mockWebHandler) closeTemplates() {
 }
 
 func (m *mockWebHandler) Get(res Response, req *http.Request) {
-	if m.err != nil {
-		res.Error(errors.New("Template GET not set"))
-
-	} else if m.templateGetRedirectURL != "" {
+	if m.templateGetRedirectURL != "" {
 		res.Redirect(m.templateGetRedirectURL, http.StatusFound)
-
-	} else if m.templateGet == nil {
-		res.Error(errors.New("GET template not set"))
 
 	} else {
 		res.ExecuteTemplate(m.templateGet.Name(), m.templateGetData)
@@ -413,57 +413,54 @@ func (m *mockWebHandler) Get(res Response, req *http.Request) {
 }
 
 func (m *mockWebHandler) Post(res Response, req *http.Request) {
-	if m.err != nil {
-		res.Error(errors.New("Template GET not set"))
-		return
-	}
-
-	if m.templatePost == nil {
-		res.Error(errors.New("POST template not set"))
-	}
-
 	res.SetCookie(&http.Cookie{Name: "cookie1", Value: "value1"})
 	res.ExecuteTemplate(m.templatePost.Name(), m.templatePostData)
 }
 
-func (m *mockWebHandler) Templates() []string {
+func (m *mockWebHandler) Templates() TemplateGroupSet {
 	var err error
 
 	m.templateGet, err = ioutil.TempFile("", "mockWebHandler")
 	if err != nil {
-		println(err.Error())
-		return nil
+		return NewTemplateGroupSet(nil)
 	}
 
 	m.templatePost, err = ioutil.TempFile("", "mockWebHandler")
 	if err != nil {
-		println(err.Error())
-		return nil
+		return NewTemplateGroupSet(nil)
 	}
 
 	if _, err = io.WriteString(m.templateGet, m.templateGetContent); err != nil {
-		println(err.Error())
-		return nil
+		return NewTemplateGroupSet(nil)
 	}
 
 	if _, err = io.WriteString(m.templatePost, m.templatePostContent); err != nil {
-		println(err.Error())
-		return nil
+		return NewTemplateGroupSet(nil)
 	}
 
-	return []string{m.templateGet.Name(), m.templatePost.Name()}
+	set := NewTemplateGroupSet(template.FuncMap{
+		"myFunc": func(value string) string { return "!confidential!" },
+	})
+	set.Insert(TemplateGroup{
+		Name:  m.templateGroup,
+		Files: []string{m.templateGet.Name(), m.templatePost.Name()},
+	})
+
+	return set
 }
 
 func (m *mockWebHandler) Interceptors() WebInterceptorChain {
-	return m.interceptors
+	chain := NewWebInterceptorChain(&setGroupInterceptor{groupName: m.templateGroup})
+	return append(chain, m.interceptors...)
 }
 
-func (m *mockWebHandler) TemplatesFunc() template.FuncMap {
-	return template.FuncMap{
-		"myFunc": func(value string) string {
-			return "!confidential!"
-		},
-	}
+type setGroupInterceptor struct {
+	NopWebInterceptor
+	groupName string
+}
+
+func (s *setGroupInterceptor) Before(r Response, _ *http.Request) {
+	r.SetTemplateGroup(s.groupName)
 }
 
 type brokenBeforeInterceptor struct {
@@ -476,7 +473,7 @@ var (
 )
 
 func (b *brokenBeforeInterceptor) Before(r Response, _ *http.Request) {
-	r.Error(brokenBeforeError)
+	r.Redirect("/seeother", http.StatusSeeOther)
 }
 
 type brokenAfterInterceptor struct {
@@ -484,7 +481,7 @@ type brokenAfterInterceptor struct {
 }
 
 func (b *brokenAfterInterceptor) After(r Response, _ *http.Request) {
-	r.Error(brokenAfterError)
+	r.Redirect("/seeother", http.StatusSeeOther)
 }
 
 type mockAJAXHandler struct {

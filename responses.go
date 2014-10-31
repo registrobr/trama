@@ -1,19 +1,19 @@
 package trama
 
 import (
-	"html/template"
+	"fmt"
 	"net/http"
 	"path"
 )
 
-type ResponseWriter struct {
+type responseWriter struct {
 	http.ResponseWriter
 	status  int
-	Written bool
+	written bool
 }
 
-func (w *ResponseWriter) Write(b []byte) (int, error) {
-	if !w.Written {
+func (w *responseWriter) Write(b []byte) (int, error) {
+	if !w.written {
 		// note: the first call to Write will trigger an
 		// implicit WriteHeader(http.StatusOK).
 		if w.status > 0 {
@@ -21,98 +21,81 @@ func (w *ResponseWriter) Write(b []byte) (int, error) {
 		}
 	}
 
-	w.Written = true
+	w.written = true
 	return w.ResponseWriter.Write(b)
 }
 
-func (w *ResponseWriter) WriteHeader(s int) {
+func (w *responseWriter) WriteHeader(s int) {
 	w.status = s
 }
 
-func (w *ResponseWriter) Status() int {
+func (w *responseWriter) Status() int {
 	return w.status
 }
 
 type Response interface {
+	SetTemplateGroup(name string)
+	SetCookie(cookie *http.Cookie)
 	Redirect(url string, statusCode int)
 	ExecuteTemplate(name string, data interface{})
-	SetCookie(cookie *http.Cookie)
-	Error(error)
 }
 
-type WebResponse struct {
-	responseWriter     http.ResponseWriter
-	request            *http.Request
-	redirectURL        string
-	redirectStatusCode int
-	templateName       string
-	templateData       interface{}
-	typ                responseType
-	errorTemplate      string
-	template           *template.Template
-	err                error
+type webResponse struct {
+	redirectURL          string
+	redirectStatusCode   int
+	templateName         string
+	templateData         interface{}
+	currentTemplateGroup string
+	templates            TemplateGroupSet
+	written              bool
+	responseWriter       http.ResponseWriter
+	request              *http.Request
+	log                  func(error)
 }
 
-func NewWebResponse(w http.ResponseWriter, r *http.Request, templ *template.Template, errorTemplate string) *WebResponse {
-	return &WebResponse{
-		responseWriter: w,
-		request:        r,
-		template:       templ,
-		errorTemplate:  errorTemplate,
-	}
+func (r *webResponse) SetTemplateGroup(name string) {
+	r.currentTemplateGroup = name
 }
 
-type responseType string
-
-const (
-	TypeTemplate responseType = "template"
-	TypeRedirect responseType = "redirect"
-	TypeError    responseType = "error"
-)
-
-func (r *WebResponse) Redirect(url string, statusCode int) {
-	r.setType(TypeRedirect)
+func (r *webResponse) Redirect(url string, statusCode int) {
+	r.written = true
 	r.redirectURL = url
 	r.redirectStatusCode = statusCode
 }
 
-func (r *WebResponse) ExecuteTemplate(name string, data interface{}) {
-	r.setType(TypeTemplate)
+func (r *webResponse) ExecuteTemplate(name string, data interface{}) {
+	r.written = true
 	_, filename := path.Split(name)
 	r.templateName = filename
 	r.templateData = data
 }
 
-func (r *WebResponse) Error(err error) {
-	r.setType(TypeError)
-	r.err = err
-}
-
-func (r *WebResponse) SetCookie(cookie *http.Cookie) {
+func (r *webResponse) SetCookie(cookie *http.Cookie) {
 	http.SetCookie(r.responseWriter, cookie)
 }
 
-func (r *WebResponse) setType(t responseType) {
-	if r.typ != TypeError {
-		r.typ = t
+func (r *webResponse) write() {
+	if !r.written {
+		r.responseWriter.WriteHeader(http.StatusInternalServerError)
+		return
 	}
-}
 
-func (r *WebResponse) Written() bool {
-	return r.typ != ""
-}
-
-func (r *WebResponse) Write() {
-	switch r.typ {
-	case TypeTemplate:
-		r.template.ExecuteTemplate(r.responseWriter, r.templateName, r.templateData)
-		// TODO logar erro
-	case TypeError:
-		r.template.ExecuteTemplate(r.responseWriter, r.errorTemplate, r.err)
-		// TODO logar erro
-	case TypeRedirect:
+	if r.redirectStatusCode != 0 {
 		http.Redirect(r.responseWriter, r.request, r.redirectURL, r.redirectStatusCode)
-	default:
-		// TODO log
+	} else {
+		group, found := r.templates.elements[r.currentTemplateGroup]
+
+		if !found {
+			r.log(fmt.Errorf("No template group named “%s” was found", r.currentTemplateGroup))
+			r.responseWriter.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		err := group.executeTemplate(r.responseWriter, r.templateName, r.templateData)
+
+		if err != nil {
+			r.log(err)
+			r.responseWriter.WriteHeader(http.StatusInternalServerError)
+		}
 	}
 }

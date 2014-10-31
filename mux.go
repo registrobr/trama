@@ -2,27 +2,29 @@ package trama
 
 import (
 	"fmt"
-	"html/template"
 	"net/http"
 	"sync"
 )
 
 type trama struct {
-	sync.RWMutex
-	router          router
-	templateDelims  []string
 	Recover         func(interface{})
-	Log             func(error)
-	GlobalTemplates []string
+	GlobalTemplates TemplateGroupSet
+
+	sync.RWMutex
+	router      router
+	log         func(error)
+	leftDelim   string
+	rightDelim  string
+	webHandlers []*adapter
 }
 
 func New(log func(error)) *trama {
 	t := &trama{router: newRouter()}
 
 	if log != nil {
-		t.Log = log
+		t.log = log
 	} else {
-		t.Log = func(err error) { println(err.Error()) }
+		t.log = func(err error) { println(err.Error()) }
 	}
 
 	return t
@@ -31,52 +33,57 @@ func New(log func(error)) *trama {
 type webHandlerConstructor func() WebHandler
 type ajaxHandlerConstructor func() AJAXHandler
 
-func (t *trama) SetTemplateDelims(open, clos string) {
-	t.templateDelims = []string{open, clos}
+func (t *trama) SetTemplateDelims(left, right string) {
+	t.leftDelim = left
+	t.rightDelim = right
 }
 
 func (t *trama) RegisterPage(uri string, h webHandlerConstructor) {
 	t.Lock()
 	defer t.Unlock()
 
-	a := &adapter{webHandler: h, log: t.Log}
-	templ := template.New(uri)
-
-	if len(t.templateDelims) == 2 {
-		templ.Delims(t.templateDelims[0], t.templateDelims[1])
-	}
-
-	handler := h()
-
-	if funcMap := handler.TemplatesFunc(); funcMap != nil {
-		templ = templ.Funcs(funcMap)
-	}
-
-	handlerTemplates := handler.Templates()
-
-	if len(handlerTemplates) > 0 {
-		files := make([]string, 0, len(t.GlobalTemplates)+len(handlerTemplates))
-		files = append(files, t.GlobalTemplates...)
-		files = append(files, handlerTemplates...)
-		templ = template.Must(templ.ParseFiles(files...))
-	}
-
-	a.template = templ
+	a := &adapter{webHandler: h, log: t.log}
 
 	if err := t.router.appendRoute(uri, a); err != nil {
 		panic("Cannot append route: " + err.Error())
 	}
+
+	t.webHandlers = append(t.webHandlers, a)
 }
 
 func (t *trama) RegisterService(uri string, h ajaxHandlerConstructor) {
 	t.Lock()
 	defer t.Unlock()
 
-	a := &adapter{ajaxHandler: h, log: t.Log}
+	a := &adapter{ajaxHandler: h, log: t.log}
 
 	if err := t.router.appendRoute(uri, a); err != nil {
 		panic("Cannot append route: " + err.Error())
 	}
+}
+
+func (t *trama) ParseTemplates() error {
+	t.Lock()
+	defer t.Unlock()
+
+	for _, h := range t.webHandlers {
+		set := h.webHandler().Templates()
+		err := set.union(t.GlobalTemplates)
+
+		if err != nil {
+			return err
+		}
+
+		err = set.parse(t.leftDelim, t.rightDelim)
+
+		if err != nil {
+			return err
+		}
+
+		h.templates = set
+	}
+
+	return nil
 }
 
 func (t *trama) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +97,7 @@ func (t *trama) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if t.Recover != nil {
 				t.Recover(r)
 			} else {
-				t.Log(fmt.Errorf("%s", r))
+				t.log(fmt.Errorf("%s", r))
 			}
 		}
 	}()

@@ -1,16 +1,12 @@
 package trama
 
-import (
-	"html/template"
-	"net/http"
-)
+import "net/http"
 
 type WebHandler interface {
 	Get(Response, *http.Request)
 	Post(Response, *http.Request)
 	Interceptors() WebInterceptorChain
-	Templates() []string
-	TemplatesFunc() template.FuncMap
+	Templates() TemplateGroupSet
 }
 
 type AJAXHandler interface {
@@ -31,12 +27,8 @@ func (d *DefaultWebHandler) Get(Response, *http.Request) {}
 
 func (d *DefaultWebHandler) Post(Response, *http.Request) {}
 
-func (d *DefaultWebHandler) Templates() []string {
-	return nil
-}
-
-func (d *DefaultWebHandler) TemplatesFunc() template.FuncMap {
-	return nil
+func (d *DefaultWebHandler) Templates() TemplateGroupSet {
+	return NewTemplateGroupSet(nil)
 }
 
 type DefaultAJAXHandler struct {
@@ -68,12 +60,11 @@ func (s *DefaultAJAXHandler) Head(w http.ResponseWriter, r *http.Request) {
 }
 
 type adapter struct {
-	webHandler    webHandlerConstructor
-	ajaxHandler   ajaxHandlerConstructor
-	uriVars       map[string]string
-	log           func(error)
-	template      *template.Template
-	errorTemplate string
+	webHandler  webHandlerConstructor
+	ajaxHandler ajaxHandlerConstructor
+	uriVars     map[string]string
+	templates   TemplateGroupSet
+	log         func(error)
 }
 
 func (a adapter) serveHTTP(w http.ResponseWriter, r *http.Request) {
@@ -85,14 +76,19 @@ func (a adapter) serveHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
-	response := NewWebResponse(w, r, a.template, a.errorTemplate)
+	response := &webResponse{
+		responseWriter: w,
+		request:        r,
+		templates:      a.templates,
+		log:            a.log,
+	}
 	handler := a.webHandler()
 	interceptors := handler.Interceptors()
 
 	for k, interceptor := range interceptors {
 		interceptor.Before(response, r)
 
-		if response.Written() {
+		if response.written {
 			interceptors = interceptors[:k+1]
 			goto write
 		}
@@ -112,11 +108,11 @@ write:
 		interceptors[k].After(response, r)
 	}
 
-	response.Write()
+	response.write()
 }
 
 func (a adapter) serveAJAX(rw http.ResponseWriter, r *http.Request) {
-	w := &ResponseWriter{ResponseWriter: rw}
+	w := &responseWriter{ResponseWriter: rw}
 	handler := a.ajaxHandler()
 	newParamDecoder(handler, a.uriVars, a.log).decode()
 	interceptors := handler.Interceptors()
@@ -124,7 +120,7 @@ func (a adapter) serveAJAX(rw http.ResponseWriter, r *http.Request) {
 	for k, interceptor := range interceptors {
 		interceptor.Before(w, r)
 
-		if w.status > 0 || w.Written {
+		if w.status > 0 || w.written {
 			interceptors = interceptors[:k+1]
 			goto write
 		}
@@ -152,7 +148,7 @@ write:
 		interceptors[k].After(w, r)
 	}
 
-	if !w.Written {
+	if !w.written {
 		w.Write(nil)
 	}
 }

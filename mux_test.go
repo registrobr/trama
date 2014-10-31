@@ -3,7 +3,6 @@ package trama
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -37,68 +36,68 @@ func TestRegisterPage(t *testing.T) {
 		{
 			description: "I should render the template including the header and footer",
 			templateContentLowerPriority: `
-				[[template "` + name1 + `"]]
+			[[template "` + name1 + `"]]
 
-				Viver seu tempo: para o que ir viver
-				num deserto literal ou de alpendres;
-				em ermos, que não distraiam de viver
-				a agulha de um só instante, plenamente.
+			Viver seu tempo: para o que ir viver
+			num deserto literal ou de alpendres;
+			em ermos, que não distraiam de viver
+			a agulha de um só instante, plenamente.
 
-				[[template "` + name2 + `"]]
+			[[template "` + name2 + `"]]
 			`,
 
 			expectedContent: `
-				Habitar o tempo
+			Habitar o tempo
 
-				Viver seu tempo: para o que ir viver
-				num deserto literal ou de alpendres;
-				em ermos, que não distraiam de viver
-				a agulha de um só instante, plenamente.
+			Viver seu tempo: para o que ir viver
+			num deserto literal ou de alpendres;
+			em ermos, que não distraiam de viver
+			a agulha de um só instante, plenamente.
 
-				João Cabral de Melo Neto
+			João Cabral de Melo Neto
 			`,
 		},
 		{
 			description: "I should render the template including the header, footer, and the aditional template",
 
 			templateContentHigherPriority: `
-				[[template "` + name1 + `"]]
+			[[template "` + name1 + `"]]
 
-				Viver seu tempo: para o que ir viver
-				num deserto literal ou de alpendres;
-				em ermos, que não distraiam de viver
-				a agulha de um só instante, plenamente.
+			Viver seu tempo: para o que ir viver
+			num deserto literal ou de alpendres;
+			em ermos, que não distraiam de viver
+			a agulha de um só instante, plenamente.
 
-				[[template "` + name2 + `"]]
+			[[template "` + name2 + `"]]
 			`,
 
 			templateContentLowerPriority: `ele corre vazio, o tal tempo ao vivo;`,
 
 			expectedContent: `
-				Habitar o tempo
+			Habitar o tempo
 
-				Viver seu tempo: para o que ir viver
-				num deserto literal ou de alpendres;
-				em ermos, que não distraiam de viver
-				a agulha de um só instante, plenamente.
+			Viver seu tempo: para o que ir viver
+			num deserto literal ou de alpendres;
+			em ermos, que não distraiam de viver
+			a agulha de um só instante, plenamente.
 
-				João Cabral de Melo Neto
+			João Cabral de Melo Neto
 			`,
 		},
 	}
 
 	mux := New(func(err error) { t.Error("Unexpected error:", err) })
 	mux.SetTemplateDelims("[[", "]]")
-	mux.GlobalTemplates = []string{globalTemplates[0].Name(), globalTemplates[1].Name()}
-
-	defer func() {
-		if x := recover(); x != nil {
-			t.Error("Recovering from error:", x)
-		}
-	}()
+	mux.GlobalTemplates = NewTemplateGroupSet(nil)
+	groupName := "pt"
+	mux.GlobalTemplates.Insert(TemplateGroup{
+		Name:  groupName,
+		Files: []string{globalTemplates[0].Name(), globalTemplates[1].Name()},
+	})
 
 	for i, item := range data {
 		handler := &mockWebHandler{
+			templateGroup:       groupName,
 			templateGetContent:  item.templateContentHigherPriority,
 			templatePostContent: item.templateContentLowerPriority,
 		}
@@ -107,6 +106,11 @@ func TestRegisterPage(t *testing.T) {
 
 		uri := fmt.Sprintf("/uri/%d", i)
 		mux.RegisterPage(uri, func() WebHandler { return handler })
+		err := mux.ParseTemplates()
+
+		if err != nil {
+			t.Errorf("Item %d, “%s”, unexpected error: “%s”", i, item.description, err)
+		}
 
 		h, err := mux.router.match(uri)
 
@@ -117,7 +121,7 @@ func TestRegisterPage(t *testing.T) {
 			t.Errorf("Item %d, “%s”, nil web handler constructor", i, item.description)
 
 		} else if h.webHandler() != handler {
-			t.Errorf("Item %d, “%s”, mismatch handlers. Expecting %s; found %s", i, item.description, handler, h.webHandler())
+			t.Errorf("Item %d, “%s”, mismatch handlers. Expecting %p; found %p", i, item.description, handler, h.webHandler())
 
 		} else {
 			buffer := new(bytes.Buffer)
@@ -125,10 +129,10 @@ func TestRegisterPage(t *testing.T) {
 
 			if item.templateContentHigherPriority != "" {
 				_, filename := path.Split(handler.templateGet.Name())
-				err = h.template.ExecuteTemplate(buffer, filename, nil)
+				err = h.templates.elements[groupName].executeTemplate(buffer, filename, nil)
 			} else {
 				_, filename := path.Split(handler.templatePost.Name())
-				err = h.template.ExecuteTemplate(buffer, filename, nil)
+				err = h.templates.elements[groupName].executeTemplate(buffer, filename, nil)
 			}
 
 			if err != nil {
@@ -139,6 +143,31 @@ func TestRegisterPage(t *testing.T) {
 			}
 		}
 	}
+}
+
+func writeGlobalTemplates() ([]*os.File, error) {
+	var err error
+	var global1, global2 *os.File
+
+	global1, err = ioutil.TempFile("", "global1")
+	if err != nil {
+		return nil, err
+	}
+
+	global2, err = ioutil.TempFile("", "global2")
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = io.WriteString(global1, "Habitar o tempo"); err != nil {
+		return nil, err
+	}
+
+	if _, err = io.WriteString(global2, "João Cabral de Melo Neto"); err != nil {
+		return nil, err
+	}
+
+	return []*os.File{global1, global2}, nil
 }
 
 func TestRegisterService(t *testing.T) {
@@ -175,6 +204,9 @@ func TestRegisterService(t *testing.T) {
 }
 
 func TestServeHTTP(t *testing.T) {
+	mock := &mockWebHandler{templateGetRedirectURL: "/redirect"}
+	defer mock.closeTemplates()
+
 	data := []struct {
 		description    string
 		uri            string
@@ -186,11 +218,7 @@ func TestServeHTTP(t *testing.T) {
 			description: "it should call a handler correctly",
 			uri:         "/example",
 			routes: map[string]webHandlerConstructor{
-				"/example": func() WebHandler {
-					return &mockWebHandler{
-						templateGetRedirectURL: "/redirect",
-					}
-				},
+				"/example": func() WebHandler { return mock },
 			},
 			recoverDefined: true,
 			expectedStatus: http.StatusFound,
@@ -258,50 +286,19 @@ func TestServeHTTP(t *testing.T) {
 	}
 }
 
-func writeGlobalTemplates() ([]*os.File, error) {
-	var err error
-	var global1, global2 *os.File
-
-	global1, err = ioutil.TempFile("", "global1")
-	if err != nil {
-		return nil, err
-	}
-
-	global2, err = ioutil.TempFile("", "global2")
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err = io.WriteString(global1, "Habitar o tempo"); err != nil {
-		return nil, err
-	}
-
-	if _, err = io.WriteString(global2, "João Cabral de Melo Neto"); err != nil {
-		return nil, err
-	}
-
-	return []*os.File{global1, global2}, nil
-}
-
 type crazyWebHandler struct {
 }
 
 func (h *crazyWebHandler) Get(Response, *http.Request) {
 	panic(fmt.Errorf("I'm a crazy handler!"))
 }
-
 func (h *crazyWebHandler) Post(Response, *http.Request) {
 	panic(fmt.Errorf("I'm a crazy handler!"))
 }
-
 func (h *crazyWebHandler) Interceptors() WebInterceptorChain {
 	return NewWebInterceptorChain()
 }
 
-func (h *crazyWebHandler) Templates() []string {
-	return []string{}
-}
-
-func (h *crazyWebHandler) TemplatesFunc() template.FuncMap {
-	return nil
+func (h *crazyWebHandler) Templates() TemplateGroupSet {
+	return NewTemplateGroupSet(nil)
 }

@@ -73,22 +73,24 @@ func (r *router) findNode(sequence []token) (*node, error) {
 	uriVars := make(map[string]string)
 	current := r.root
 
-	staticParent := false
+	var lastStatic *node
 	for _, tok := range sequence {
 		child := current.childForValue(tok.name)
 
 		if child == nil {
-			if staticParent {
+			if lastStatic != nil {
+				current = lastStatic
 				break
+
 			} else {
 				return nil, ErrRouteNotFound
 			}
-
-		} else if child.handler != nil && child.handler.staticHandler != nil {
-			staticParent = true
 		}
 
 		current = child
+		if current.handler != nil && current.handler.staticHandler != nil {
+			lastStatic = current
+		}
 
 		if child.value.isWildcard() {
 			uriVars[child.value.parameter] = tok.name

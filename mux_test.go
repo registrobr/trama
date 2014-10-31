@@ -292,9 +292,11 @@ type crazyWebHandler struct {
 func (h *crazyWebHandler) Get(Response, *http.Request) {
 	panic(fmt.Errorf("I'm a crazy handler!"))
 }
+
 func (h *crazyWebHandler) Post(Response, *http.Request) {
 	panic(fmt.Errorf("I'm a crazy handler!"))
 }
+
 func (h *crazyWebHandler) Interceptors() WebInterceptorChain {
 	return NewWebInterceptorChain()
 }

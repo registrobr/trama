@@ -62,6 +62,17 @@ func (t *trama) RegisterService(uri string, h ajaxHandlerConstructor) {
 	}
 }
 
+func (t *trama) RegisterStatic(uri string, root http.FileSystem) {
+	t.Lock()
+	defer t.Unlock()
+
+	a := &adapter{staticHandler: http.FileServer(root), log: t.log}
+
+	if err := t.router.appendRoute(uri, a); err != nil {
+		panic("Cannot append route: " + err.Error())
+	}
+}
+
 func (t *trama) ParseTemplates() error {
 	t.Lock()
 	defer t.Unlock()

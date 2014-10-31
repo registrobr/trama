@@ -1,6 +1,9 @@
 package trama
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+)
 
 func TestAppendRoute(t *testing.T) {
 	var data = []struct {
@@ -79,6 +82,13 @@ func TestAppendRoute(t *testing.T) {
 			description: "It should append a route with a constant sibling of another constant",
 			uri:         "gestos/das/folhas/de/fogo",
 		},
+		{
+			description: "It should append the web handler route in root",
+			uri:         "/",
+			handler: adapter{
+				webHandler: func() WebHandler { return &DefaultWebHandler{} },
+			},
+		},
 	}
 
 	rt := newRouter()
@@ -147,11 +157,25 @@ func TestFindRoute(t *testing.T) {
 			handler:      &adapter{},
 			shouldntFind: true,
 		},
+		{
+			description:  "It shouldn't find a route with a non-static parent handler",
+			route:        "gestuais/do/corpo",
+			matchURI:     "gestuais/do/corpo/do/fogo",
+			handler:      &adapter{},
+			shouldntFind: true,
+		},
+		{
+			description: "It should find a route with a static parent handler",
+			route:       "gestuais/do/corpo",
+			matchURI:    "gestuais/do/corpo/do/fogo",
+			handler: &adapter{
+				staticHandler: http.NotFoundHandler(),
+			},
+		},
 	}
 
-	rt := newRouter()
-
 	for i, item := range data {
+		rt := newRouter()
 		err := rt.appendRoute(item.route, item.handler)
 
 		if err != nil {

@@ -60,11 +60,12 @@ func (s *DefaultAJAXHandler) Head(w http.ResponseWriter, r *http.Request) {
 }
 
 type adapter struct {
-	webHandler  webHandlerConstructor
-	ajaxHandler ajaxHandlerConstructor
-	uriVars     map[string]string
-	templates   TemplateGroupSet
-	log         func(error)
+	webHandler    webHandlerConstructor
+	ajaxHandler   ajaxHandlerConstructor
+	staticHandler http.Handler
+	uriVars       map[string]string
+	templates     TemplateGroupSet
+	log           func(error)
 }
 
 func (a adapter) serveHTTP(w http.ResponseWriter, r *http.Request) {
@@ -72,6 +73,8 @@ func (a adapter) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		a.serveWeb(w, r)
 	} else if a.ajaxHandler != nil {
 		a.serveAJAX(w, r)
+	} else if a.staticHandler != nil {
+		a.staticHandler.ServeHTTP(w, r)
 	}
 }
 

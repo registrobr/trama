@@ -6,33 +6,6 @@ import (
 	"path"
 )
 
-type responseWriter struct {
-	http.ResponseWriter
-	status  int
-	written bool
-}
-
-func (w *responseWriter) Write(b []byte) (int, error) {
-	if !w.written {
-		// note: the first call to Write will trigger an
-		// implicit WriteHeader(http.StatusOK).
-		if w.status > 0 {
-			w.ResponseWriter.WriteHeader(w.status)
-		}
-	}
-
-	w.written = true
-	return w.ResponseWriter.Write(b)
-}
-
-func (w *responseWriter) WriteHeader(s int) {
-	w.status = s
-}
-
-func (w *responseWriter) Status() int {
-	return w.status
-}
-
 type Response interface {
 	SetTemplateGroup(name string)
 	SetCookie(cookie *http.Cookie)
@@ -48,7 +21,7 @@ type webResponse struct {
 	currentTemplateGroup string
 	templates            TemplateGroupSet
 	written              bool
-	responseWriter       http.ResponseWriter
+	responseWriter       *BufferedResponseWriter
 	request              *http.Request
 	log                  func(error)
 }

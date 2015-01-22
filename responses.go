@@ -11,6 +11,7 @@ type Response interface {
 	SetCookie(cookie *http.Cookie)
 	Redirect(url string, statusCode int)
 	ExecuteTemplate(name string, data interface{})
+	TemplateName() string
 }
 
 type webResponse struct {

@@ -21,9 +21,13 @@ type webResponse struct {
 	currentTemplateGroup string
 	templates            TemplateGroupSet
 	written              bool
-	responseWriter       *BufferedResponseWriter
+	responseWriter       http.ResponseWriter
 	request              *http.Request
 	log                  func(error)
+}
+
+func (r *webResponse) TemplateName() string {
+	return r.templateName
 }
 
 func (r *webResponse) SetTemplateGroup(name string) {

@@ -80,7 +80,7 @@ func (a adapter) serveHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
 	response := &webResponse{
-		responseWriter: NewBufferedResponseWriter(w),
+		responseWriter: w,
 		request:        r,
 		templates:      a.templates,
 		log:            a.log,
@@ -113,7 +113,6 @@ write:
 	}
 
 	response.write()
-	response.responseWriter.Flush()
 }
 
 func (a adapter) serveAJAX(rw http.ResponseWriter, r *http.Request) {

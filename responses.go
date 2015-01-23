@@ -73,7 +73,6 @@ func (r *webResponse) write() {
 
 		if err != nil {
 			r.log(err)
-			r.responseWriter.WriteHeader(http.StatusInternalServerError)
 		}
 	}
 }

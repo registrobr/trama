@@ -3,8 +3,8 @@ package trama
 import "net/http"
 
 type WebInterceptor interface {
-	Before(Response, *http.Request)
-	After(Response, *http.Request)
+	Before(Response, *http.Request) error
+	After(Response, *http.Request, error)
 }
 
 type WebInterceptorChain []WebInterceptor
@@ -40,9 +40,9 @@ func (n *NopWebInterceptorChain) Interceptors() WebInterceptorChain {
 
 type NopWebInterceptor struct{}
 
-func (n *NopWebInterceptor) Before(Response, *http.Request) {}
+func (n *NopWebInterceptor) Before(Response, *http.Request) error { return nil }
 
-func (n *NopWebInterceptor) After(Response, *http.Request) {}
+func (n *NopWebInterceptor) After(Response, *http.Request, error) {}
 
 type NopAJAXInterceptorChain struct{}
 

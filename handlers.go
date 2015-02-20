@@ -3,8 +3,8 @@ package trama
 import "net/http"
 
 type WebHandler interface {
-	Get(Response, *http.Request)
-	Post(Response, *http.Request)
+	Get(Response, *http.Request) error
+	Post(Response, *http.Request) error
 	Interceptors() WebInterceptorChain
 	Templates() TemplateGroupSet
 }
@@ -23,9 +23,9 @@ type DefaultWebHandler struct {
 	NopWebInterceptorChain
 }
 
-func (d *DefaultWebHandler) Get(Response, *http.Request) {}
+func (d *DefaultWebHandler) Get(Response, *http.Request) error { return nil }
 
-func (d *DefaultWebHandler) Post(Response, *http.Request) {}
+func (d *DefaultWebHandler) Post(Response, *http.Request) error { return nil }
 
 func (d *DefaultWebHandler) Templates() TemplateGroupSet {
 	return NewTemplateGroupSet(nil)
@@ -88,11 +88,12 @@ func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
 
 	handler := a.webHandler()
 	interceptors := handler.Interceptors()
+	var err error
 
 	for k, interceptor := range interceptors {
-		interceptor.Before(response, r)
+		err = interceptor.Before(response, r)
 
-		if response.written {
+		if err != nil {
 			interceptors = interceptors[:k+1]
 			goto write
 		}
@@ -100,16 +101,16 @@ func (a adapter) serveWeb(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "GET":
-		handler.Get(response, r)
+		err = handler.Get(response, r)
 	case "POST":
-		handler.Post(response, r)
+		err = handler.Post(response, r)
 	default:
 		w.WriteHeader(http.StatusNotImplemented)
 	}
 
 write:
 	for k := len(interceptors) - 1; k >= 0; k-- {
-		interceptors[k].After(response, r)
+		interceptors[k].After(response, r, err)
 	}
 
 	response.write()

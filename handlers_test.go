@@ -122,24 +122,12 @@ func TestServeWeb(t *testing.T) {
 		{
 			description:       "It should break at the interceptor's Before run",
 			contentGet:        "Tecendo a manhã",
-			expectedResultGet: "<a href=\"/seeother\">See Other</a>.\n\n",
+			expectedResultGet: "",
 			interceptors: WebInterceptorChain{
 				&struct{ NopWebInterceptor }{},
 				&brokenBeforeInterceptor{},
 				&struct{ NopWebInterceptor }{},
 			},
-		},
-		{
-			description:       "It should break at the interceptor's After run",
-			contentGet:        "Tecendo a manhã",
-			expectedResultGet: "<a href=\"/seeother\">See Other</a>.\n\n",
-			interceptors: WebInterceptorChain{
-				&struct{ NopWebInterceptor }{},
-				&brokenAfterInterceptor{},
-				&struct{ NopWebInterceptor }{},
-			},
-			expectedCookies:    "cookie1=value1",
-			expectedStatusCode: http.StatusSeeOther,
 		},
 		{
 			description:       "It should redirect when necessary",
@@ -403,18 +391,21 @@ func (m *mockWebHandler) closeTemplates() {
 	m.templatePost.Close()
 }
 
-func (m *mockWebHandler) Get(res Response, req *http.Request) {
+func (m *mockWebHandler) Get(res Response, req *http.Request) error {
 	if m.templateGetRedirectURL != "" {
 		res.Redirect(m.templateGetRedirectURL, http.StatusFound)
 
 	} else {
 		res.ExecuteTemplate(m.templateGet.Name(), m.templateGetData)
 	}
+
+	return nil
 }
 
-func (m *mockWebHandler) Post(res Response, req *http.Request) {
+func (m *mockWebHandler) Post(res Response, req *http.Request) error {
 	res.SetCookie(&http.Cookie{Name: "cookie1", Value: "value1"})
 	res.ExecuteTemplate(m.templatePost.Name(), m.templatePostData)
+	return nil
 }
 
 func (m *mockWebHandler) Templates() TemplateGroupSet {
@@ -459,8 +450,9 @@ type setGroupInterceptor struct {
 	groupName string
 }
 
-func (s *setGroupInterceptor) Before(r Response, _ *http.Request) {
+func (s *setGroupInterceptor) Before(r Response, _ *http.Request) error {
 	r.SetTemplateGroup(s.groupName)
+	return nil
 }
 
 type brokenBeforeInterceptor struct {
@@ -472,16 +464,8 @@ var (
 	brokenAfterError  = errors.New("Error from a broken After implementation of a web interceptor")
 )
 
-func (b *brokenBeforeInterceptor) Before(r Response, _ *http.Request) {
-	r.Redirect("/seeother", http.StatusSeeOther)
-}
-
-type brokenAfterInterceptor struct {
-	NopWebInterceptor
-}
-
-func (b *brokenAfterInterceptor) After(r Response, _ *http.Request) {
-	r.Redirect("/seeother", http.StatusSeeOther)
+func (b *brokenBeforeInterceptor) Before(r Response, _ *http.Request) error {
+	return brokenBeforeError
 }
 
 type mockAJAXHandler struct {

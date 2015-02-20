@@ -289,12 +289,14 @@ func TestServeHTTP(t *testing.T) {
 type crazyWebHandler struct {
 }
 
-func (h *crazyWebHandler) Get(Response, *http.Request) {
+func (h *crazyWebHandler) Get(Response, *http.Request) error {
 	panic(fmt.Errorf("I'm a crazy handler!"))
+	return nil
 }
 
-func (h *crazyWebHandler) Post(Response, *http.Request) {
+func (h *crazyWebHandler) Post(Response, *http.Request) error {
 	panic(fmt.Errorf("I'm a crazy handler!"))
+	return nil
 }
 
 func (h *crazyWebHandler) Interceptors() WebInterceptorChain {

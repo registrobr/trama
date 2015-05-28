@@ -6,20 +6,20 @@ import (
 	"sync"
 )
 
-type trama struct {
+type Mux struct {
 	Recover         func(interface{})
 	GlobalTemplates TemplateGroupSet
 
 	sync.RWMutex
-	router      router
-	log         func(error)
-	leftDelim   string
-	rightDelim  string
-	webHandlers []*adapter
+	mux        *http.ServeMux
+	log        func(error)
+	leftDelim  string
+	rightDelim string
+	handlers   []*adapter
 }
 
-func New(log func(error)) *trama {
-	t := &trama{router: newRouter()}
+func NewMux(log func(error)) *Mux {
+	t := &Mux{mux: http.NewServeMux()}
 
 	if log != nil {
 		t.log = log
@@ -30,55 +30,23 @@ func New(log func(error)) *trama {
 	return t
 }
 
-type webHandlerConstructor func() WebHandler
-type ajaxHandlerConstructor func() AJAXHandler
+func (t *Mux) Register(uri string, h func() Handler) {
+	a := &adapter{handler: h, log: t.log}
+	t.handlers = append(t.handlers, a)
+	t.mux.Handle(uri, a)
+}
 
-func (t *trama) SetTemplateDelims(left, right string) {
+func (t *Mux) SetTemplateDelims(left, right string) {
 	t.leftDelim = left
 	t.rightDelim = right
 }
 
-func (t *trama) RegisterPage(uri string, h webHandlerConstructor) {
+func (t *Mux) ParseTemplates() error {
 	t.Lock()
 	defer t.Unlock()
 
-	a := &adapter{webHandler: h, log: t.log}
-
-	if err := t.router.appendRoute(uri, a); err != nil {
-		panic("Cannot append route: " + err.Error())
-	}
-
-	t.webHandlers = append(t.webHandlers, a)
-}
-
-func (t *trama) RegisterService(uri string, h ajaxHandlerConstructor) {
-	t.Lock()
-	defer t.Unlock()
-
-	a := &adapter{ajaxHandler: h, log: t.log}
-
-	if err := t.router.appendRoute(uri, a); err != nil {
-		panic("Cannot append route: " + err.Error())
-	}
-}
-
-func (t *trama) RegisterStatic(uri string, root http.FileSystem) {
-	t.Lock()
-	defer t.Unlock()
-
-	a := &adapter{staticHandler: http.FileServer(root), log: t.log}
-
-	if err := t.router.appendRoute(uri, a); err != nil {
-		panic("Cannot append route: " + err.Error())
-	}
-}
-
-func (t *trama) ParseTemplates() error {
-	t.Lock()
-	defer t.Unlock()
-
-	for _, h := range t.webHandlers {
-		set := h.webHandler().Templates()
+	for _, h := range t.handlers {
+		set := h.handler().Templates()
 		err := set.union(t.GlobalTemplates)
 
 		if err != nil {
@@ -97,10 +65,7 @@ func (t *trama) ParseTemplates() error {
 	return nil
 }
 
-func (t *trama) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	t.RLock()
-	defer t.RUnlock()
-
+func (t *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if r := recover(); r != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -113,12 +78,5 @@ func (t *trama) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	handler, err := t.router.match(r.URL.Path)
-
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	handler.serveHTTP(w, r)
+	t.mux.ServeHTTP(w, r)
 }

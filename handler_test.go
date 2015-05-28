@@ -155,7 +155,7 @@ func TestServeWeb(t *testing.T) {
 		}
 
 		handler := adapter{
-			webHandler: func() WebHandler { return mock },
+			handler: func() Handler { return mock },
 			log: func(err error) {
 				notBeforeError := err.Error() != brokenBeforeError.Error()
 				notAfterError := err.Error() != brokenAfterError.Error()
@@ -174,7 +174,7 @@ func TestServeWeb(t *testing.T) {
 			t.Error(err)
 		}
 
-		handler.serveHTTP(w, r)
+		handler.ServeHTTP(w, r)
 
 		if item.expectedStatusCode != 0 && w.Code != item.expectedStatusCode {
 			t.Errorf("Item %d, “%s”, wrong status code. Expecting %d; found %d", i, item.description, item.expectedStatusCode, w.Code)
@@ -195,7 +195,7 @@ func TestServeWeb(t *testing.T) {
 				t.Error(err)
 			}
 
-			handler.serveHTTP(w, r)
+			handler.ServeHTTP(w, r)
 
 			if item.expectedStatusCode != 0 && w.Code != item.expectedStatusCode {
 				t.Errorf("Item %d, “%s”, wrong status code. Expecting %d; found %d", i, item.description, item.expectedStatusCode, w.Code)
@@ -217,156 +217,10 @@ func TestServeWeb(t *testing.T) {
 			t.Error(err)
 		}
 
-		handler.serveHTTP(w, r)
+		handler.ServeHTTP(w, r)
 
 		if item.expectedStatusCode != 0 && w.Code != http.StatusNotImplemented {
 			t.Errorf("Item %d, “%s”, wrong status code. Expecting %d; found %d", i, item.description, http.StatusNotImplemented, w.Code)
-		}
-	}
-}
-
-func TestServeAJAX(t *testing.T) {
-	data := []struct {
-		description                    string
-		interceptors                   AJAXInterceptorChain
-		httpMethod                     string
-		expectedStatusCode             int
-		shouldBreakAtInterceptorNumber int
-	}{
-		{
-			description:                    "It should handle the GET request properly",
-			httpMethod:                     "GET",
-			expectedStatusCode:             http.StatusOK,
-			shouldBreakAtInterceptorNumber: 1 << 10, // Shouldn't break at all
-		},
-		{
-			description:                    "It should handle the PUT request properly",
-			httpMethod:                     "PUT",
-			expectedStatusCode:             http.StatusOK,
-			shouldBreakAtInterceptorNumber: 1 << 10,
-		},
-		{
-			description:                    "It should handle the POST request properly",
-			httpMethod:                     "POST",
-			expectedStatusCode:             http.StatusOK,
-			shouldBreakAtInterceptorNumber: 1 << 10,
-		},
-		{
-			description:                    "It should handle the PATCH request properly",
-			httpMethod:                     "PATCH",
-			expectedStatusCode:             http.StatusOK,
-			shouldBreakAtInterceptorNumber: 1 << 10,
-		},
-		{
-			description:                    "It should handle the DELETE request properly",
-			httpMethod:                     "DELETE",
-			expectedStatusCode:             http.StatusOK,
-			shouldBreakAtInterceptorNumber: 1 << 10,
-		},
-		{
-			description:                    "It should handle the HEAD request properly",
-			httpMethod:                     "HEAD",
-			expectedStatusCode:             http.StatusOK,
-			shouldBreakAtInterceptorNumber: 1 << 10,
-		},
-		{
-			description:                    "It should respond with a Not Implemented status",
-			httpMethod:                     "UNKNOWN",
-			expectedStatusCode:             http.StatusNotImplemented,
-			shouldBreakAtInterceptorNumber: -1,
-		},
-		{
-			description:        "It should handle the HEAD request with interceptors properly",
-			httpMethod:         "HEAD",
-			expectedStatusCode: http.StatusOK,
-			interceptors: AJAXInterceptorChain{
-				&mockAJAXInterceptor{},
-				&mockAJAXInterceptor{},
-				&mockAJAXInterceptor{},
-			},
-			shouldBreakAtInterceptorNumber: 1 << 10,
-		},
-		{
-			description:        "It should break at the interceptor's Before run and not run the handler's method",
-			httpMethod:         "HEAD",
-			expectedStatusCode: http.StatusInternalServerError,
-			interceptors: AJAXInterceptorChain{
-				&mockAJAXInterceptor{},
-				&brokenBeforeAJAXInterceptor{},
-				&mockAJAXInterceptor{},
-			},
-			shouldBreakAtInterceptorNumber: 1,
-		},
-	}
-
-	for i, item := range data {
-		handleFuncCalled := false
-		mock := &mockAJAXHandler{
-			handleFunc: func(http.ResponseWriter, *http.Request) {
-				handleFuncCalled = true
-			},
-			interceptors: item.interceptors,
-		}
-		handler := adapter{
-			ajaxHandler: func() AJAXHandler { return mock },
-			log: func(err error) {
-				t.Errorf("Item %d, “%s”, unexpected error found: %s", i, item.description, err)
-			},
-			uriVars: map[string]string{"param1": "1", "param2": "2"},
-		}
-
-		w := httptest.NewRecorder()
-		r, err := http.NewRequest(item.httpMethod, "", nil)
-
-		if err != nil {
-			t.Error(err)
-		}
-
-		handler.serveHTTP(w, r)
-
-		for k, interceptor := range item.interceptors {
-			interc := interceptor.(MockAJAXInterceptor)
-
-			if k <= item.shouldBreakAtInterceptorNumber {
-				if !interc.BeforeMethodCalled() {
-					t.Errorf("Item %d, “%s”, not calling Before method for interceptor number %d", i, item.description, k)
-				}
-
-				if !interc.AfterMethodCalled() {
-					t.Errorf("Item %d, “%s”, not calling After method for interceptor number %d", i, item.description, k)
-				}
-
-			} else {
-				if interc.BeforeMethodCalled() {
-					t.Errorf("Item %d, “%s”, calling Before method for interceptor number %d", i, item.description, k)
-				}
-
-				if interc.AfterMethodCalled() {
-					t.Errorf("Item %d, “%s”, calling After method for interceptor number %d", i, item.description, k)
-				}
-			}
-		}
-
-		if len(item.interceptors) < item.shouldBreakAtInterceptorNumber {
-			if !handleFuncCalled {
-				t.Errorf("Item %d, “%s”, not calling handler", i, item.description)
-			}
-		} else {
-			if handleFuncCalled {
-				t.Errorf("Item %d, “%s”, calling handler", i, item.description)
-			}
-		}
-
-		if mock.Param1 != "1" {
-			t.Errorf("Item %d, “%s”, wrong param1. Expecting “1”; found “%s”", i, item.description, mock.Param1)
-		}
-
-		if mock.Param2 != 2 {
-			t.Errorf("Item %d, “%s”, wrong param1. Expecting “2”; found “%d”", i, item.description, mock.Param2)
-		}
-
-		if w.Code != item.expectedStatusCode {
-			t.Errorf("Item %d, “%s”, wrong status code. Expecting %d; found %d", i, item.description, item.expectedStatusCode, w.Code)
 		}
 	}
 }

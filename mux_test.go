@@ -1,7 +1,6 @@
 package trama
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestRegisterPage(t *testing.T) {
+func TestMuxServeHTTP(t *testing.T) {
 	globalTemplates, err := writeGlobalTemplates()
 
 	if err != nil {
@@ -28,14 +27,16 @@ func TestRegisterPage(t *testing.T) {
 	_, name2 := path.Split(globalTemplates[1].Name())
 
 	data := []struct {
-		description                   string
-		templateContentHigherPriority string
-		templateContentLowerPriority  string
-		expectedContent               string
+		description     string
+		uri             string
+		templateContent string
+		expectedContent string
 	}{
 		{
-			description: "I should render the template including the header and footer",
-			templateContentLowerPriority: `
+			description: "It should render the template including the header and footer",
+			uri:         "/olha/aqui",
+
+			templateContent: `
 			[[template "` + name1 + `"]]
 
 			Viver seu tempo: para o que ir viver
@@ -58,9 +59,10 @@ func TestRegisterPage(t *testing.T) {
 			`,
 		},
 		{
-			description: "I should render the template including the header, footer, and the aditional template",
+			description: "It should render this template instead of the previous one",
+			uri:         "/olha/aqui-também",
 
-			templateContentHigherPriority: `
+			templateContent: `
 			[[template "` + name1 + `"]]
 
 			Viver seu tempo: para o que ir viver
@@ -70,8 +72,6 @@ func TestRegisterPage(t *testing.T) {
 
 			[[template "` + name2 + `"]]
 			`,
-
-			templateContentLowerPriority: `ele corre vazio, o tal tempo ao vivo;`,
 
 			expectedContent: `
 			Habitar o tempo
@@ -86,7 +86,7 @@ func TestRegisterPage(t *testing.T) {
 		},
 	}
 
-	mux := New(func(err error) { t.Error("Unexpected error:", err) })
+	mux := NewMux(func(err error) { t.Error("Unexpected error:", err) })
 	mux.SetTemplateDelims("[[", "]]")
 	mux.GlobalTemplates = NewTemplateGroupSet(nil)
 	groupName := "pt"
@@ -97,50 +97,34 @@ func TestRegisterPage(t *testing.T) {
 
 	for i, item := range data {
 		handler := &mockWebHandler{
-			templateGroup:       groupName,
-			templateGetContent:  item.templateContentHigherPriority,
-			templatePostContent: item.templateContentLowerPriority,
+			templateGroup:      groupName,
+			templateGetContent: item.templateContent,
 		}
 
 		defer handler.closeTemplates()
 
-		uri := fmt.Sprintf("/uri/%d", i)
-		mux.RegisterPage(uri, func() WebHandler { return handler })
+		mux.Register(item.uri, func() Handler { return handler })
 		err := mux.ParseTemplates()
 
 		if err != nil {
 			t.Errorf("Item %d, “%s”, unexpected error: “%s”", i, item.description, err)
 		}
 
-		h, err := mux.router.match(uri)
+		r, err := http.NewRequest("GET", item.uri, nil)
 
 		if err != nil {
-			t.Errorf("Item %d, “%s”, unexpected error: “%s”", i, item.description, err)
+			t.Fatal(err)
+		}
 
-		} else if h.webHandler == nil {
-			t.Errorf("Item %d, “%s”, nil web handler constructor", i, item.description)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
 
-		} else if h.webHandler() != handler {
-			t.Errorf("Item %d, “%s”, mismatch handlers. Expecting %p; found %p", i, item.description, handler, h.webHandler())
+		if w.Code != http.StatusOK {
+			t.Errorf("Item %d, “%s”, unexpected status code. Expecting %d; found %d", i, item.description, http.StatusOK, w.Code)
+		}
 
-		} else {
-			buffer := new(bytes.Buffer)
-			var err error
-
-			if item.templateContentHigherPriority != "" {
-				_, filename := path.Split(handler.templateGet.Name())
-				err = h.templates.elements[groupName].executeTemplate(buffer, filename, nil)
-			} else {
-				_, filename := path.Split(handler.templatePost.Name())
-				err = h.templates.elements[groupName].executeTemplate(buffer, filename, nil)
-			}
-
-			if err != nil {
-				t.Errorf("Item %d, “%s”, unexpected error: “%s”", i, item.description, err)
-
-			} else if buffer.String() != item.expectedContent {
-				t.Errorf("Item %d, “%s”, unexpected result. Expecting %s; found %s", i, item.description, item.expectedContent, buffer.String())
-			}
+		if w.Body.String() != item.expectedContent {
+			t.Errorf("Item %d, “%s”, unexpected result. Expecting %s; found %s", i, item.description, item.expectedContent, w.Body)
 		}
 	}
 }
@@ -170,121 +154,88 @@ func writeGlobalTemplates() ([]*os.File, error) {
 	return []*os.File{global1, global2}, nil
 }
 
-func TestRegisterService(t *testing.T) {
-	data := []struct {
-		description   string
-		uri           string
-		expectedPanic bool
-	}{
-		{description: "it should register a service correctly", uri: "/example", expectedPanic: false},
-		{description: "it should deny duplicated URI", uri: "/example", expectedPanic: true},
-	}
+// func TestServeHTTP(t *testing.T) {
+// 	mock := &mockWebHandler{templateGetRedirectURL: "/redirect"}
+// 	defer mock.closeTemplates()
 
-	trama := New(func(err error) {
-		t.Fatal(err)
-	})
+// 	data := []struct {
+// 		description    string
+// 		uri            string
+// 		routes         map[string]handlerConstructor
+// 		recoverDefined bool
+// 		expectedStatus int
+// 	}{
+// 		{
+// 			description: "it should call a handler correctly",
+// 			uri:         "/example",
+// 			routes: map[string]handlerConstructor{
+// 				"/example": func() Handler { return mock },
+// 			},
+// 			recoverDefined: true,
+// 			expectedStatus: http.StatusFound,
+// 		},
+// 		{
+// 			description:    "it should detect when the URI doesn't exist",
+// 			uri:            "/idontexist",
+// 			routes:         nil,
+// 			recoverDefined: true,
+// 			expectedStatus: http.StatusNotFound,
+// 		},
+// 		{
+// 			description: "it should panic in the handler and call recover function",
+// 			uri:         "/example",
+// 			routes: map[string]handlerConstructor{
+// 				"/example": func() Handler {
+// 					return &crazyWebHandler{}
+// 				},
+// 			},
+// 			recoverDefined: true,
+// 			expectedStatus: http.StatusInternalServerError,
+// 		},
+// 		{
+// 			description: "it should panic in the handler and log the recover",
+// 			uri:         "/example",
+// 			routes: map[string]handlerConstructor{
+// 				"/example": func() Handler {
+// 					return &crazyWebHandler{}
+// 				},
+// 			},
+// 			recoverDefined: false,
+// 			expectedStatus: http.StatusInternalServerError,
+// 		},
+// 	}
 
-	for i, item := range data {
-		defer func() {
-			if r := recover(); r != nil {
-				if !item.expectedPanic {
-					t.Errorf("Item %d, “%s”, wrong result. Unexpected panic: %+v", i, item.description, r)
-				}
-			}
-		}()
+// 	for i, item := range data {
+// 		trama := New(func(err error) {
+// 			if item.recoverDefined {
+// 				t.Fatal(err)
+// 			}
+// 		})
 
-		trama.RegisterService(item.uri, func() AJAXHandler {
-			return &mockAJAXHandler{}
-		})
+// 		for uri, handler := range item.routes {
+// 			trama.Register(uri, handler)
+// 		}
 
-		if item.expectedPanic {
-			t.Errorf("Item %d, “%s”, wrong result. Expected panic!", i, item.description)
-		}
-	}
-}
+// 		if item.recoverDefined {
+// 			trama.Recover = func(r interface{}) {}
+// 		} else {
+// 			trama.Recover = nil
+// 		}
 
-func TestServeHTTP(t *testing.T) {
-	mock := &mockWebHandler{templateGetRedirectURL: "/redirect"}
-	defer mock.closeTemplates()
+// 		r, err := http.NewRequest("GET", item.uri, nil)
+// 		if err != nil {
+// 			t.Fatal(err)
+// 		}
+// 		w := httptest.NewRecorder()
 
-	data := []struct {
-		description    string
-		uri            string
-		routes         map[string]webHandlerConstructor
-		recoverDefined bool
-		expectedStatus int
-	}{
-		{
-			description: "it should call a handler correctly",
-			uri:         "/example",
-			routes: map[string]webHandlerConstructor{
-				"/example": func() WebHandler { return mock },
-			},
-			recoverDefined: true,
-			expectedStatus: http.StatusFound,
-		},
-		{
-			description:    "it should detect when the URI doesn't exist",
-			uri:            "/idontexist",
-			routes:         nil,
-			recoverDefined: true,
-			expectedStatus: http.StatusNotFound,
-		},
-		{
-			description: "it should panic in the handler and call recover function",
-			uri:         "/example",
-			routes: map[string]webHandlerConstructor{
-				"/example": func() WebHandler {
-					return &crazyWebHandler{}
-				},
-			},
-			recoverDefined: true,
-			expectedStatus: http.StatusInternalServerError,
-		},
-		{
-			description: "it should panic in the handler and log the recover",
-			uri:         "/example",
-			routes: map[string]webHandlerConstructor{
-				"/example": func() WebHandler {
-					return &crazyWebHandler{}
-				},
-			},
-			recoverDefined: false,
-			expectedStatus: http.StatusInternalServerError,
-		},
-	}
+// 		trama.ServeHTTP(w, r)
 
-	for i, item := range data {
-		trama := New(func(err error) {
-			if item.recoverDefined {
-				t.Fatal(err)
-			}
-		})
-
-		for uri, handler := range item.routes {
-			trama.RegisterPage(uri, handler)
-		}
-
-		if item.recoverDefined {
-			trama.Recover = func(r interface{}) {}
-		} else {
-			trama.Recover = nil
-		}
-
-		r, err := http.NewRequest("GET", item.uri, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		w := httptest.NewRecorder()
-
-		trama.ServeHTTP(w, r)
-
-		if w.Code != item.expectedStatus {
-			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%d”;\nfound “%d”",
-				i, item.description, item.expectedStatus, w.Code)
-		}
-	}
-}
+// 		if w.Code != item.expectedStatus {
+// 			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%d”;\nfound “%d”",
+// 				i, item.description, item.expectedStatus, w.Code)
+// 		}
+// 	}
+// }
 
 type crazyWebHandler struct {
 }

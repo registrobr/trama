@@ -96,7 +96,7 @@ func TestMuxServeHTTP(t *testing.T) {
 	})
 
 	for i, item := range data {
-		handler := &mockWebHandler{
+		handler := &mockHandler{
 			templateGroup:      groupName,
 			templateGetContent: item.templateContent,
 		}
@@ -155,7 +155,7 @@ func writeGlobalTemplates() ([]*os.File, error) {
 }
 
 // func TestServeHTTP(t *testing.T) {
-// 	mock := &mockWebHandler{templateGetRedirectURL: "/redirect"}
+// 	mock := &mockHandler{templateGetRedirectURL: "/redirect"}
 // 	defer mock.closeTemplates()
 
 // 	data := []struct {
@@ -186,7 +186,7 @@ func writeGlobalTemplates() ([]*os.File, error) {
 // 			uri:         "/example",
 // 			routes: map[string]handlerConstructor{
 // 				"/example": func() Handler {
-// 					return &crazyWebHandler{}
+// 					return &crazyHandler{}
 // 				},
 // 			},
 // 			recoverDefined: true,
@@ -197,7 +197,7 @@ func writeGlobalTemplates() ([]*os.File, error) {
 // 			uri:         "/example",
 // 			routes: map[string]handlerConstructor{
 // 				"/example": func() Handler {
-// 					return &crazyWebHandler{}
+// 					return &crazyHandler{}
 // 				},
 // 			},
 // 			recoverDefined: false,
@@ -237,23 +237,23 @@ func writeGlobalTemplates() ([]*os.File, error) {
 // 	}
 // }
 
-type crazyWebHandler struct {
+type crazyHandler struct {
 }
 
-func (h *crazyWebHandler) Get(Response, *http.Request) error {
+func (h *crazyHandler) Get(Response, *http.Request) error {
 	panic(fmt.Errorf("I'm a crazy handler!"))
 	return nil
 }
 
-func (h *crazyWebHandler) Post(Response, *http.Request) error {
+func (h *crazyHandler) Post(Response, *http.Request) error {
 	panic(fmt.Errorf("I'm a crazy handler!"))
 	return nil
 }
 
-func (h *crazyWebHandler) Interceptors() WebInterceptorChain {
-	return NewWebInterceptorChain()
+func (h *crazyHandler) Interceptors() InterceptorChain {
+	return NewInterceptorChain()
 }
 
-func (h *crazyWebHandler) Templates() TemplateGroupSet {
+func (h *crazyHandler) Templates() TemplateGroupSet {
 	return NewTemplateGroupSet(nil)
 }

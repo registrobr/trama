@@ -5,12 +5,12 @@ import "net/http"
 type Handler interface {
 	Get(Response, *http.Request) error
 	Post(Response, *http.Request) error
-	Interceptors() WebInterceptorChain
+	Interceptors() InterceptorChain
 	Templates() TemplateGroupSet
 }
 
 type DefaultHandler struct {
-	NopWebInterceptorChain
+	NopInterceptorChain
 }
 
 func (d *DefaultHandler) Get(Response, *http.Request) error { return nil }

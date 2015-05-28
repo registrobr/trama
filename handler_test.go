@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestServeWeb(t *testing.T) {
+func TestServe(t *testing.T) {
 	data := []struct {
 		description string
 
@@ -25,7 +25,7 @@ func TestServeWeb(t *testing.T) {
 		expectedResultPost string
 		expectedCookies    string
 
-		interceptors       WebInterceptorChain
+		interceptors       InterceptorChain
 		expectedStatusCode int
 	}{
 		{
@@ -113,20 +113,20 @@ func TestServeWeb(t *testing.T) {
 				que, tecido, se eleva por si: luz balão.`,
 			expectedCookies:    "cookie1=value1",
 			expectedStatusCode: http.StatusOK,
-			interceptors: WebInterceptorChain{
-				&struct{ NopWebInterceptor }{},
-				&struct{ NopWebInterceptor }{},
-				&struct{ NopWebInterceptor }{},
+			interceptors: InterceptorChain{
+				&struct{ NopInterceptor }{},
+				&struct{ NopInterceptor }{},
+				&struct{ NopInterceptor }{},
 			},
 		},
 		{
 			description:       "It should break at the interceptor's Before run",
 			contentGet:        "Tecendo a manhã",
 			expectedResultGet: "",
-			interceptors: WebInterceptorChain{
-				&struct{ NopWebInterceptor }{},
+			interceptors: InterceptorChain{
+				&struct{ NopInterceptor }{},
 				&brokenBeforeInterceptor{},
-				&struct{ NopWebInterceptor }{},
+				&struct{ NopInterceptor }{},
 			},
 		},
 		{
@@ -137,7 +137,7 @@ func TestServeWeb(t *testing.T) {
 	}
 
 	for i, item := range data {
-		mock := &mockWebHandler{
+		mock := &mockHandler{
 			templateGetContent:     item.contentGet,
 			templateGetData:        item.dataGet,
 			templateGetRedirectURL: item.redirectURL,
@@ -225,7 +225,7 @@ func TestServeWeb(t *testing.T) {
 	}
 }
 
-type mockWebHandler struct {
+type mockHandler struct {
 	templateGroup string
 
 	templateGet            *os.File
@@ -237,15 +237,15 @@ type mockWebHandler struct {
 	templatePostContent string
 	templatePostData    interface{}
 
-	interceptors WebInterceptorChain
+	interceptors InterceptorChain
 }
 
-func (m *mockWebHandler) closeTemplates() {
+func (m *mockHandler) closeTemplates() {
 	m.templateGet.Close()
 	m.templatePost.Close()
 }
 
-func (m *mockWebHandler) Get(res Response, req *http.Request) error {
+func (m *mockHandler) Get(res Response, req *http.Request) error {
 	if m.templateGetRedirectURL != "" {
 		res.Redirect(m.templateGetRedirectURL, http.StatusFound)
 
@@ -256,21 +256,21 @@ func (m *mockWebHandler) Get(res Response, req *http.Request) error {
 	return nil
 }
 
-func (m *mockWebHandler) Post(res Response, req *http.Request) error {
+func (m *mockHandler) Post(res Response, req *http.Request) error {
 	res.SetCookie(&http.Cookie{Name: "cookie1", Value: "value1"})
 	res.ExecuteTemplate(m.templatePost.Name(), m.templatePostData)
 	return nil
 }
 
-func (m *mockWebHandler) Templates() TemplateGroupSet {
+func (m *mockHandler) Templates() TemplateGroupSet {
 	var err error
 
-	m.templateGet, err = ioutil.TempFile("", "mockWebHandler")
+	m.templateGet, err = ioutil.TempFile("", "mockHandler")
 	if err != nil {
 		return NewTemplateGroupSet(nil)
 	}
 
-	m.templatePost, err = ioutil.TempFile("", "mockWebHandler")
+	m.templatePost, err = ioutil.TempFile("", "mockHandler")
 	if err != nil {
 		return NewTemplateGroupSet(nil)
 	}
@@ -294,13 +294,13 @@ func (m *mockWebHandler) Templates() TemplateGroupSet {
 	return set
 }
 
-func (m *mockWebHandler) Interceptors() WebInterceptorChain {
-	chain := NewWebInterceptorChain(&setGroupInterceptor{groupName: m.templateGroup})
+func (m *mockHandler) Interceptors() InterceptorChain {
+	chain := NewInterceptorChain(&setGroupInterceptor{groupName: m.templateGroup})
 	return append(chain, m.interceptors...)
 }
 
 type setGroupInterceptor struct {
-	NopWebInterceptor
+	NopInterceptor
 	groupName string
 }
 
@@ -310,7 +310,7 @@ func (s *setGroupInterceptor) Before(r Response, _ *http.Request) error {
 }
 
 type brokenBeforeInterceptor struct {
-	NopWebInterceptor
+	NopInterceptor
 }
 
 var (
@@ -320,82 +320,4 @@ var (
 
 func (b *brokenBeforeInterceptor) Before(r Response, _ *http.Request) error {
 	return brokenBeforeError
-}
-
-type mockAJAXHandler struct {
-	Param1       string `param:"param1"`
-	Param2       int    `param:"param2"`
-	handleFunc   func(http.ResponseWriter, *http.Request)
-	interceptors AJAXInterceptorChain
-	methodCalled string
-}
-
-func (m *mockAJAXHandler) Get(w http.ResponseWriter, r *http.Request) {
-	m.methodCalled = "GET"
-	m.handleFunc(w, r)
-}
-
-func (m *mockAJAXHandler) Post(w http.ResponseWriter, r *http.Request) {
-	m.methodCalled = "POST"
-	m.handleFunc(w, r)
-}
-
-func (m *mockAJAXHandler) Put(w http.ResponseWriter, r *http.Request) {
-	m.methodCalled = "PUT"
-	m.handleFunc(w, r)
-}
-
-func (m *mockAJAXHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	m.methodCalled = "DELETE"
-	m.handleFunc(w, r)
-}
-
-func (m *mockAJAXHandler) Patch(w http.ResponseWriter, r *http.Request) {
-	m.methodCalled = "PATCH"
-	m.handleFunc(w, r)
-}
-
-func (m *mockAJAXHandler) Head(w http.ResponseWriter, r *http.Request) {
-	m.methodCalled = "HEAD"
-	m.handleFunc(w, r)
-}
-
-func (m *mockAJAXHandler) Interceptors() AJAXInterceptorChain {
-	return m.interceptors
-}
-
-type mockAJAXInterceptor struct {
-	beforeMethodCalled bool
-	afterMethodCalled  bool
-}
-
-func (m *mockAJAXInterceptor) Before(w http.ResponseWriter, r *http.Request) {
-	m.beforeMethodCalled = true
-}
-
-func (m *mockAJAXInterceptor) After(w http.ResponseWriter, r *http.Request) {
-	m.afterMethodCalled = true
-}
-
-func (m *mockAJAXInterceptor) BeforeMethodCalled() bool {
-	return m.beforeMethodCalled
-}
-
-func (m *mockAJAXInterceptor) AfterMethodCalled() bool {
-	return m.afterMethodCalled
-}
-
-type MockAJAXInterceptor interface {
-	AJAXInterceptor
-	BeforeMethodCalled() bool
-	AfterMethodCalled() bool
-}
-
-type brokenBeforeAJAXInterceptor struct {
-	mockAJAXInterceptor
-}
-
-func (b *brokenBeforeAJAXInterceptor) Before(w http.ResponseWriter, r *http.Request) {
-	b.beforeMethodCalled = true
-	w.WriteHeader(http.StatusInternalServerError)
 }

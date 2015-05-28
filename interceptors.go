@@ -2,55 +2,29 @@ package trama
 
 import "net/http"
 
-type WebInterceptor interface {
+type Interceptor interface {
 	Before(Response, *http.Request) error
 	After(Response, *http.Request, error)
 }
 
-type WebInterceptorChain []WebInterceptor
+type InterceptorChain []Interceptor
 
-func (c WebInterceptorChain) Chain(i WebInterceptor) WebInterceptorChain {
+func (c InterceptorChain) Chain(i Interceptor) InterceptorChain {
 	return append(c, i)
 }
 
-func NewWebInterceptorChain(is ...WebInterceptor) WebInterceptorChain {
+func NewInterceptorChain(is ...Interceptor) InterceptorChain {
 	return is
 }
 
-type AJAXInterceptor interface {
-	Before(w http.ResponseWriter, r *http.Request)
-	After(w http.ResponseWriter, r *http.Request)
+type NopInterceptorChain struct{}
+
+func (n *NopInterceptorChain) Interceptors() InterceptorChain {
+	return NewInterceptorChain()
 }
 
-type AJAXInterceptorChain []AJAXInterceptor
+type NopInterceptor struct{}
 
-func (c AJAXInterceptorChain) Chain(i AJAXInterceptor) AJAXInterceptorChain {
-	return append(c, i)
-}
+func (n *NopInterceptor) Before(Response, *http.Request) error { return nil }
 
-func NewAJAXInterceptorChain(is ...AJAXInterceptor) AJAXInterceptorChain {
-	return is
-}
-
-type NopWebInterceptorChain struct{}
-
-func (n *NopWebInterceptorChain) Interceptors() WebInterceptorChain {
-	return NewWebInterceptorChain()
-}
-
-type NopWebInterceptor struct{}
-
-func (n *NopWebInterceptor) Before(Response, *http.Request) error { return nil }
-
-func (n *NopWebInterceptor) After(Response, *http.Request, error) {}
-
-type NopAJAXInterceptorChain struct{}
-
-func (n *NopAJAXInterceptorChain) Interceptors() AJAXInterceptorChain {
-	return NewAJAXInterceptorChain()
-}
-
-type NopAJAXInterceptor struct{}
-
-func (n *NopAJAXInterceptor) Before(w http.ResponseWriter, r *http.Request) {}
-func (n *NopAJAXInterceptor) After(w http.ResponseWriter, r *http.Request)  {}
+func (n *NopInterceptor) After(Response, *http.Request, error) {}

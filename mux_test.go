@@ -154,91 +154,84 @@ func writeGlobalTemplates() ([]*os.File, error) {
 	return []*os.File{global1, global2}, nil
 }
 
-// func TestServeHTTP(t *testing.T) {
-// 	mock := &mockHandler{templateGetRedirectURL: "/redirect"}
-// 	defer mock.closeTemplates()
+func TestServeHTTP(t *testing.T) {
+	mock := &mockHandler{templateGetRedirectURL: "/redirect"}
+	defer mock.closeTemplates()
 
-// 	data := []struct {
-// 		description    string
-// 		uri            string
-// 		routes         map[string]handlerConstructor
-// 		recoverDefined bool
-// 		expectedStatus int
-// 	}{
-// 		{
-// 			description: "it should call a handler correctly",
-// 			uri:         "/example",
-// 			routes: map[string]handlerConstructor{
-// 				"/example": func() Handler { return mock },
-// 			},
-// 			recoverDefined: true,
-// 			expectedStatus: http.StatusFound,
-// 		},
-// 		{
-// 			description:    "it should detect when the URI doesn't exist",
-// 			uri:            "/idontexist",
-// 			routes:         nil,
-// 			recoverDefined: true,
-// 			expectedStatus: http.StatusNotFound,
-// 		},
-// 		{
-// 			description: "it should panic in the handler and call recover function",
-// 			uri:         "/example",
-// 			routes: map[string]handlerConstructor{
-// 				"/example": func() Handler {
-// 					return &crazyHandler{}
-// 				},
-// 			},
-// 			recoverDefined: true,
-// 			expectedStatus: http.StatusInternalServerError,
-// 		},
-// 		{
-// 			description: "it should panic in the handler and log the recover",
-// 			uri:         "/example",
-// 			routes: map[string]handlerConstructor{
-// 				"/example": func() Handler {
-// 					return &crazyHandler{}
-// 				},
-// 			},
-// 			recoverDefined: false,
-// 			expectedStatus: http.StatusInternalServerError,
-// 		},
-// 	}
+	data := []struct {
+		description    string
+		uriToRegister  string
+		handler        Handler
+		requestURI     string
+		recoverDefined bool
+		expectedStatus int
+	}{
+		{
+			description:    "it should call a handler correctly",
+			uriToRegister:  "/example",
+			requestURI:     "/example",
+			handler:        mock,
+			recoverDefined: true,
+			expectedStatus: http.StatusFound,
+		},
+		{
+			description:    "it should detect when the URI doesn't exist",
+			uriToRegister:  "/example",
+			requestURI:     "/cadê-eu",
+			handler:        mock,
+			recoverDefined: true,
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			description:    "it should panic in the handler and call recover function",
+			uriToRegister:  "/example",
+			requestURI:     "/example",
+			handler:        &crazyHandler{},
+			recoverDefined: true,
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			description:    "it should panic in the handler and log the recover",
+			uriToRegister:  "/example",
+			requestURI:     "/example",
+			handler:        &crazyHandler{},
+			recoverDefined: false,
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
 
-// 	for i, item := range data {
-// 		trama := New(func(err error) {
-// 			if item.recoverDefined {
-// 				t.Fatal(err)
-// 			}
-// 		})
+	for i, item := range data {
+		mux := NewMux(func(err error) {
+			if item.recoverDefined {
+				t.Fatal(err)
+			}
+		})
 
-// 		for uri, handler := range item.routes {
-// 			trama.Register(uri, handler)
-// 		}
+		mux.Register(item.uriToRegister, func() Handler { return item.handler })
 
-// 		if item.recoverDefined {
-// 			trama.Recover = func(r interface{}) {}
-// 		} else {
-// 			trama.Recover = nil
-// 		}
+		if item.recoverDefined {
+			mux.Recover = func(r interface{}) {}
+		} else {
+			mux.Recover = nil
+		}
 
-// 		r, err := http.NewRequest("GET", item.uri, nil)
-// 		if err != nil {
-// 			t.Fatal(err)
-// 		}
-// 		w := httptest.NewRecorder()
+		r, err := http.NewRequest("GET", item.requestURI, nil)
 
-// 		trama.ServeHTTP(w, r)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-// 		if w.Code != item.expectedStatus {
-// 			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%d”;\nfound “%d”",
-// 				i, item.description, item.expectedStatus, w.Code)
-// 		}
-// 	}
-// }
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
 
-type crazyHandler struct {
+		if w.Code != item.expectedStatus {
+			t.Errorf("Item %d, “%s”, unexpected result. Expecting “%d”;\nfound “%d”",
+				i, item.description, item.expectedStatus, w.Code)
+		}
+	}
 }
+
+type crazyHandler struct{}
 
 func (h *crazyHandler) Get(Response, *http.Request) error {
 	panic(fmt.Errorf("I'm a crazy handler!"))

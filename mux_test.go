@@ -235,12 +235,10 @@ type crazyHandler struct{}
 
 func (h *crazyHandler) Get(Response, *http.Request) error {
 	panic(fmt.Errorf("I'm a crazy handler!"))
-	return nil
 }
 
 func (h *crazyHandler) Post(Response, *http.Request) error {
 	panic(fmt.Errorf("I'm a crazy handler!"))
-	return nil
 }
 
 func (h *crazyHandler) Interceptors() InterceptorChain {

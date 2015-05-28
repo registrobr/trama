@@ -267,26 +267,28 @@ func subSet(a, b TemplateGroupSet) bool {
 	}
 
 	for k, v := range a.elements {
-		if element, found := b.elements[k]; !found {
+		element, found := b.elements[k]
+
+		if found {
 			return false
-		} else {
-			if v.Name != element.Name {
-				return false
+		}
+
+		if v.Name != element.Name {
+			return false
+		}
+
+		for _, file := range v.Files {
+			found := false
+
+			for _, fileInB := range element.Files {
+				if file == fileInB {
+					found = true
+					break
+				}
 			}
 
-			for _, file := range v.Files {
-				found := false
-
-				for _, fileInB := range element.Files {
-					if file == fileInB {
-						found = true
-						break
-					}
-				}
-
-				if !found {
-					return false
-				}
+			if !found {
+				return false
 			}
 		}
 	}

@@ -157,8 +157,8 @@ func TestServe(t *testing.T) {
 		handler := adapter{
 			handler: func() Handler { return mock },
 			log: func(err error) {
-				notBeforeError := err.Error() != brokenBeforeError.Error()
-				notAfterError := err.Error() != brokenAfterError.Error()
+				notBeforeError := err.Error() != errorBrokenBefore.Error()
+				notAfterError := err.Error() != errorBrokenAfter.Error()
 
 				if notBeforeError && notAfterError {
 					t.Errorf("Item %d, “%s”, unexpected error: “%s”", i, item.description, err)
@@ -314,10 +314,10 @@ type brokenBeforeInterceptor struct {
 }
 
 var (
-	brokenBeforeError = errors.New("Error from a broken Before implementation of a web interceptor")
-	brokenAfterError  = errors.New("Error from a broken After implementation of a web interceptor")
+	errorBrokenBefore = errors.New("Error from a broken Before implementation of a web interceptor")
+	errorBrokenAfter  = errors.New("Error from a broken After implementation of a web interceptor")
 )
 
 func (b *brokenBeforeInterceptor) Before(r Response, _ *http.Request) error {
-	return brokenBeforeError
+	return errorBrokenBefore
 }

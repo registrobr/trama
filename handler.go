@@ -2,10 +2,21 @@ package trama
 
 import "net/http"
 
+// Handler is the interface a trama handler must implement.
 type Handler interface {
+	// Get handles HTTP requests with a GET method
 	Get(Response, *http.Request) error
+
+	// Post handles HTTP requests with a POST method
 	Post(Response, *http.Request) error
+
+	// Interceptors defines the interceptor chain to be called along with the
+	// handler when a request arrives.
 	Interceptors() InterceptorChain
+
+	// Templates returns a TemplateGroupSet to be registered by the framework.
+	// These templates are parsed at once when calling Mux’s ParseTemplates
+	// method.
 	Templates() TemplateGroupSet
 }
 

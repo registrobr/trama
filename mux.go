@@ -6,11 +6,18 @@ import (
 	"sync"
 )
 
+// A Mux is an HTTP multiplexer for trama handlers. It can store global HTML
+// templates to be used by any handler.
 type Mux struct {
-	Recover         func(interface{})
+	// Recover specifies an optional function to be called if the goroutine
+	// handling the request panics.
+	Recover func(interface{})
+
+	// GlobalTemplates stores every HTML template not specific to some handler,
+	// such as headers and footers one would use in every page.
 	GlobalTemplates TemplateGroupSet
 
-	sync.RWMutex
+	mutex      sync.RWMutex
 	mux        *http.ServeMux
 	log        func(error)
 	leftDelim  string
@@ -18,16 +25,18 @@ type Mux struct {
 	handlers   []*adapter
 }
 
-func NewMux(log func(error)) *Mux {
-	t := &Mux{mux: http.NewServeMux()}
-
-	if log != nil {
-		t.log = log
-	} else {
-		t.log = func(err error) { println(err.Error()) }
+// NewMux constructs a new trama multiplexer.
+func NewMux() *Mux {
+	return &Mux{
+		mux: http.NewServeMux(),
+		log: func(err error) { println(err.Error()) },
 	}
+}
 
-	return t
+// SetLogger sets a function to be called when an internal error happens. If no
+// function is set, trama defaults to write to stdout.
+func (t *Mux) SetLogger(logger func(error)) {
+	t.log = logger
 }
 
 func (t *Mux) Register(uri string, h func() Handler) {
@@ -42,8 +51,8 @@ func (t *Mux) SetTemplateDelims(left, right string) {
 }
 
 func (t *Mux) ParseTemplates() error {
-	t.Lock()
-	defer t.Unlock()
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
 
 	for _, h := range t.handlers {
 		set := h.handler().Templates()

@@ -20,15 +20,20 @@ type Handler interface {
 	Templates() TemplateGroupSet
 }
 
-type DefaultHandler struct {
+// NopHandler is a facility for writing handlers. It is meant to be embedded in
+// your handler if you don’t need to implement all Handler methods.
+type NopHandler struct {
 	NopInterceptorChain
 }
 
-func (d *DefaultHandler) Get(Response, *http.Request) error { return nil }
+// Get writes no response and returns no error
+func (n *NopHandler) Get(Response, *http.Request) error { return nil }
 
-func (d *DefaultHandler) Post(Response, *http.Request) error { return nil }
+// Post writes no response and returns no error
+func (n *NopHandler) Post(Response, *http.Request) error { return nil }
 
-func (d *DefaultHandler) Templates() TemplateGroupSet {
+// Templates returns an empty TemplateGroupSet
+func (n *NopHandler) Templates() TemplateGroupSet {
 	return NewTemplateGroupSet(nil)
 }
 

@@ -269,7 +269,7 @@ func subSet(a, b TemplateGroupSet) bool {
 	for k, v := range a.elements {
 		element, found := b.elements[k]
 
-		if found {
+		if !found {
 			return false
 		}
 

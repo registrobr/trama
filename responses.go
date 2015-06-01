@@ -14,7 +14,7 @@ type Response interface {
 	TemplateName() string
 }
 
-type webResponse struct {
+type response struct {
 	redirectURL          string
 	redirectStatusCode   int
 	templateName         string
@@ -27,32 +27,32 @@ type webResponse struct {
 	log                  func(error)
 }
 
-func (r *webResponse) TemplateName() string {
+func (r *response) TemplateName() string {
 	return r.templateName
 }
 
-func (r *webResponse) SetTemplateGroup(name string) {
+func (r *response) SetTemplateGroup(name string) {
 	r.currentTemplateGroup = name
 }
 
-func (r *webResponse) Redirect(url string, statusCode int) {
+func (r *response) Redirect(url string, statusCode int) {
 	r.written = true
 	r.redirectURL = url
 	r.redirectStatusCode = statusCode
 }
 
-func (r *webResponse) ExecuteTemplate(name string, data interface{}) {
+func (r *response) ExecuteTemplate(name string, data interface{}) {
 	r.written = true
 	_, filename := path.Split(name)
 	r.templateName = filename
 	r.templateData = data
 }
 
-func (r *webResponse) SetCookie(cookie *http.Cookie) {
+func (r *response) SetCookie(cookie *http.Cookie) {
 	http.SetCookie(r.responseWriter, cookie)
 }
 
-func (r *webResponse) write() {
+func (r *response) write() {
 	if !r.written {
 		r.responseWriter.WriteHeader(http.StatusInternalServerError)
 		return

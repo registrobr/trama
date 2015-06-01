@@ -44,7 +44,7 @@ type adapter struct {
 }
 
 func (a adapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	response := &webResponse{
+	response := &response{
 		responseWriter: w,
 		request:        r,
 		templates:      a.templates,

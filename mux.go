@@ -39,17 +39,26 @@ func (t *Mux) SetLogger(logger func(error)) {
 	t.log = logger
 }
 
+// Register registers a handler constructor to be called upon a request arrival
+// at the specified URI. The new handler made by this constructor is then used
+// to handle the request.
 func (t *Mux) Register(uri string, h func() Handler) {
 	a := &adapter{handler: h, log: t.log}
 	t.handlers = append(t.handlers, a)
 	t.mux.Handle(uri, a)
 }
 
+// SetTemplateDelims sets the delimiters used when parsing the registered
+// templates. Be aware of calling it before ParseTemplates if you use delimiters
+// other than the default ones.
 func (t *Mux) SetTemplateDelims(left, right string) {
 	t.leftDelim = left
 	t.rightDelim = right
 }
 
+// ParseTemplates parses all registered templates, including both global
+// templates and the ones specified by any registered handler. It is meant to be
+// called after registering the handlers but before any request handling.
 func (t *Mux) ParseTemplates() error {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
@@ -74,6 +83,8 @@ func (t *Mux) ParseTemplates() error {
 	return nil
 }
 
+// ServeHTTP implements the http.Handler interface. This way, Mux can be passed
+// as an argument to the http.ListenAndServe function.
 func (t *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if r := recover(); r != nil {

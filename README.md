@@ -8,3 +8,6 @@ libraries of small reusable pieces of funcionality. Also like Handy, it uses
 the handler to carry state across the entire request, what enables injecting 
 arbitrary type-safe contextual information to the pipeline.
 
+# Documentation
+
+See http://godoc.org/github.com/registrobr/trama

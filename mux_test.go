@@ -86,7 +86,8 @@ func TestMuxServeHTTP(t *testing.T) {
 		},
 	}
 
-	mux := NewMux(func(err error) { t.Error("Unexpected error:", err) })
+	mux := NewMux()
+	mux.SetLogger(func(err error) { t.Error("Unexpected error:", err) })
 	mux.SetTemplateDelims("[[", "]]")
 	mux.GlobalTemplates = NewTemplateGroupSet(nil)
 	groupName := "pt"
@@ -201,7 +202,8 @@ func TestServeHTTP(t *testing.T) {
 	}
 
 	for i, item := range data {
-		mux := NewMux(func(err error) {
+		mux := NewMux()
+		mux.SetLogger(func(err error) {
 			if item.recoverDefined {
 				t.Fatal(err)
 			}

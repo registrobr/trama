@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"trama"
+
+	"github.com/registrobr/trama"
 )
 
 type interceptorA struct{}

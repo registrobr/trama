@@ -8,6 +8,31 @@ import (
 
 // A Mux is an HTTP multiplexer for trama handlers. It can store global HTML
 // templates to be used by any handler.
+//
+// A basic example server can be:
+//
+// 	package main
+//
+// 	import (
+// 		"fmt"
+// 		"net/http"
+//
+// 		"github.com/registrobr/trama"
+// 	)
+//
+// 	type handler struct {
+// 		trama.NopHandler
+// 	}
+//
+// 	func main() {
+// 		mux := trama.NewMux()
+// 		mux.Register("/", func() trama.Handler { return &handler{} })
+// 		err := http.ListenAndServe(":12345", mux)
+//
+// 		if err != nil {
+// 			fmt.Println(err)
+// 		}
+// 	}
 type Mux struct {
 	// Recover specifies an optional function to be called if the goroutine
 	// handling the request panics.

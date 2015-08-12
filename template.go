@@ -68,6 +68,11 @@ func (t *TemplateGroupSet) Insert(g TemplateGroup) error {
 	return nil
 }
 
+// Len returns the length of the group set
+func (t *TemplateGroupSet) Len() int {
+	return len(t.elements)
+}
+
 func (t *TemplateGroupSet) find(groupName string) (group *TemplateGroup, found bool) {
 	group, found = t.elements[groupName]
 	return

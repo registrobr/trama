@@ -71,7 +71,6 @@ func (a adapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err = handler.Post(response, r)
 	default:
 		w.WriteHeader(http.StatusNotImplemented)
-		return
 	}
 
 write:

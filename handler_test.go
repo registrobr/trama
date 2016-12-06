@@ -218,10 +218,6 @@ func TestServe(t *testing.T) {
 		}
 
 		handler.ServeHTTP(w, r)
-
-		if item.expectedStatusCode != 0 && w.Code != http.StatusNotImplemented {
-			t.Errorf("Item %d, “%s”, wrong status code. Expecting %d; found %d", i, item.description, http.StatusNotImplemented, w.Code)
-		}
 	}
 }
 

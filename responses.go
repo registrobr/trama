@@ -44,6 +44,7 @@ type response struct {
 	responseWriter       http.ResponseWriter
 	request              *http.Request
 	log                  func(error)
+	returnStatus         int
 }
 
 func (r *response) TemplateName() string {
@@ -73,7 +74,11 @@ func (r *response) SetCookie(cookie *http.Cookie) {
 
 func (r *response) write() {
 	if !r.written {
-		r.responseWriter.WriteHeader(http.StatusInternalServerError)
+		if r.returnStatus != 0 {
+			r.responseWriter.WriteHeader(r.returnStatus)
+		} else {
+			r.responseWriter.WriteHeader(http.StatusInternalServerError)
+		}
 		return
 	}
 

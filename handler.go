@@ -69,6 +69,8 @@ func (a adapter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err = handler.Get(response, r)
 	case "POST":
 		err = handler.Post(response, r)
+	default:
+		response.returnStatus = http.StatusNotImplemented
 	}
 
 write:

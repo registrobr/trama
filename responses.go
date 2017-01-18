@@ -14,6 +14,10 @@ type Response interface {
 	// example.
 	SetTemplateGroup(name string)
 
+	// SetHeader sets the HTTP header that will be sent with the response. All
+	// current values of the HTTP header key are going to be replaced.
+	SetHeader(key string, value ...string)
+
 	// SetCookie sets the cookies that will be sent with the response.
 	SetCookie(cookie *http.Cookie)
 
@@ -66,6 +70,18 @@ func (r *response) ExecuteTemplate(name string, data interface{}) {
 	_, filename := path.Split(name)
 	r.templateName = filename
 	r.templateData = data
+}
+
+func (r *response) SetHeader(key string, value ...string) {
+	if len(value) == 1 {
+		r.responseWriter.Header().Set(key, value[0])
+		return
+	}
+
+	r.responseWriter.Header().Del(key)
+	for _, v := range value {
+		r.responseWriter.Header().Add(key, v)
+	}
 }
 
 func (r *response) SetCookie(cookie *http.Cookie) {

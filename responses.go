@@ -14,7 +14,8 @@ type Response interface {
 	// example.
 	SetTemplateGroup(name string)
 
-	// SetHeader sets the HTTP header that will be sent with the response.
+	// SetHeader sets the HTTP header that will be sent with the response. All
+	// current values of the HTTP header key are going to be replaced.
 	SetHeader(key string, value ...string)
 
 	// SetCookie sets the cookies that will be sent with the response.
